@@ -39,7 +39,11 @@ type AlertCommonSpec struct {
 	DisplayName           string      `json:"displayName,omitempty" norman:"required"`
 	Description           string      `json:"description,omitempty"`
 	Severity              string      `json:"severity,omitempty" norman:"required,options=info|critical|warning,default=critical"`
+<<<<<<< HEAD
 	Recipients            []Recipient `json:"recipients,omitempty" norman:"required"`
+=======
+	RecipientList         []Recipient `json:"recipientList,omitempty" norman:"required"`
+>>>>>>> update types
 	InitialWaitSeconds    int         `json:"initialWaitSeconds,omitempty" norman:"required,default=180,min=0"`
 	RepeatIntervalSeconds int         `json:"repeatIntervalSeconds,omitempty"  norman:"required,default=3600,min=0"`
 }
@@ -69,7 +73,11 @@ type Recipient struct {
 type TargetNode struct {
 	ID            string            `json:"id,omitempty"`
 	Selector      map[string]string `json:"selector,omitempty"`
+<<<<<<< HEAD
 	Condition     string            `json:"condition,omitempty" norman:"required,options=notready|disk|mem|cpu,default=notready"`
+=======
+	IsReady       bool              `json:"isReady,omitempty"`
+>>>>>>> update types
 	DiskThreshold int               `json:"diskThreshold,omitempty" norman:"min=1,max=100"`
 	MemThreshold  int               `json:"memThreshold,omitempty" norman:"min=1,max=100"`
 	CPUThreshold  int               `json:"cpuThreshold,omitempty" norman:"min=1"`
@@ -77,7 +85,12 @@ type TargetNode struct {
 
 type TargetPod struct {
 	ID           string `json:"id,omitempty" norman:"required"`
+<<<<<<< HEAD
 	Condition    string `json:"condition,omitempty" norman:"required,options=notrunning|notscheduled|restarts,default=notrunning"`
+=======
+	IsRunning    bool   `json:"isRunning,omitempty"`
+	IsScheduled  bool   `json:"isScheduled,omitempty"`
+>>>>>>> update types
 	RestartTimes int    `json:"restartTimes,omitempty" norman:"min=1"`
 }
 
@@ -88,7 +101,11 @@ type TargetWorkload struct {
 }
 
 type TargetSystemService struct {
+<<<<<<< HEAD
 	Condition string `json:"condition,omitempty" norman:"required,options=dns|etcd|controller-manager|network|scheduler,default=scheduler"`
+=======
+	Type string `json:"type,omitempty" norman:"required,options=dns|etcd|controller manager|network|scheduler,default=scheduler"`
+>>>>>>> update types
 }
 
 type AlertStatus struct {
@@ -147,14 +164,22 @@ type SmtpConfig struct {
 	Host             string `json:"host,omitempty" norman:"required,type=dnsLabel"`
 	Port             int    `json:"port,omitempty" norman:"required,min=1,max=65535"`
 	Username         string `json:"username,omitempty" norman:"required"`
+<<<<<<< HEAD
 	Password         string `json:"password,omitempty" norman:"required"`
+=======
+	Password         string `json:"password,omitempty" norman:"required,type=masked"`
+>>>>>>> update types
 	DefaultRecipient string `json:"defaultRecipient,omitempty" norman:"required"`
 	TLS              bool   `json:"tls,omitempty" norman:"required,default=true"`
 }
 
 type SlackConfig struct {
+<<<<<<< HEAD
 	DefaultRecipient string `json:"defaultRecipient,omitempty" norman:"required"`
 	URL              string `json:"url,omitempty" norman:"required"`
+=======
+	URL string `json:"url,omitempty" norman:"required"`
+>>>>>>> update types
 }
 
 type PagerdutyConfig struct {
