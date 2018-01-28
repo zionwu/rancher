@@ -88,12 +88,16 @@ type LoggingCondition struct {
 
 type ElasticsearchConfig struct {
 <<<<<<< HEAD
+<<<<<<< HEAD
 	Endpoint     string `json:"endpoint,omitempty" norman:"required"`
 =======
 	Host         string `json:"host,omitempty" norman:"required"`
 	Port         int    `json:"port,omitempty" norman:"required,default=9200,min=1,max=65535"`
 	EnableTLS    bool   `json:"enableTLS,omitempty"`
 >>>>>>> update types
+=======
+	Endpoint     string `json:"endpoint,omitempty" norman:"required"`
+>>>>>>> update logging types
 	IndexPrefix  string `json:"indexPrefix,omitempty" norman:"required"`
 	DateFormat   string `json:"dateFormat,omitempty" norman:"required,type=enum,options=YYYY-MM-DD|YYYY-MM|YYYY,default=YYYY-MM-DD"`
 	AuthUserName string `json:"authUsername,omitempty"` //secret
