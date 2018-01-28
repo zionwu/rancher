@@ -15,3 +15,6 @@
 *.pyc
 __pycache__
 /management-state
+/.vscode
+debug
+

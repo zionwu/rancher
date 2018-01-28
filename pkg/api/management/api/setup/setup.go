@@ -47,6 +47,7 @@ func Schemas(ctx context.Context, management *config.ManagementContext, schemas 
 	SecretTypes(schemas, management)
 	Stack(schemas, management)
 	Setting(schemas)
+	//Alert(schemas)
 
 	secretStore, err := machineconfig.NewStore(management)
 	if err != nil {

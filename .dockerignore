@@ -1,7 +1,4 @@
-./bin
 ./.dapper
-./build
-./dist
 ./.trash-cache
 ./.idea
 ./default.etcd
