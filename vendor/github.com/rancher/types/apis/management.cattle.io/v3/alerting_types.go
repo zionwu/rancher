@@ -38,10 +38,10 @@ type ProjectAlert struct {
 type AlertCommonSpec struct {
 	DisplayName           string      `json:"displayName,omitempty" norman:"required"`
 	Description           string      `json:"description,omitempty"`
-	Severity              string      `json:"severity,omitempty"`
-	RecipientList         []Recipient `json:"recipientList,omitempty"`
-	InitialWaitSeconds    int         `json:"initialWaitSeconds,omitempty"`
-	RepeatIntervalSeconds int         `json:"repeatIntervalSeconds,omitempty"`
+	Severity              string      `json:"severity,omitempty" norman:"required,options=info|critical|warning,default=critical"`
+	RecipientList         []Recipient `json:"recipientList,omitempty" norman:"required"`
+	InitialWaitSeconds    int         `json:"initialWaitSeconds,omitempty" norman:"required,default=180,min=0"`
+	RepeatIntervalSeconds int         `json:"repeatIntervalSeconds,omitempty"  norman:"required,default=3600,min=0"`
 }
 
 type ClusterAlertSpec struct {
@@ -71,26 +71,26 @@ type TargetNode struct {
 	ID            string            `json:"id,omitempty"`
 	Selector      map[string]string `json:"selector,omitempty"`
 	IsReady       bool              `json:"isReady,omitempty"`
-	DiskThreshold int               `json:"diskThreshold,omitempty"`
-	MemThreshold  int               `json:"memThreshold,omitempty"`
-	CPUThreshold  int               `json:"cpuThreshold,omitempty"`
+	DiskThreshold int               `json:"diskThreshold,omitempty" norman:"min=1,max=100"`
+	MemThreshold  int               `json:"memThreshold,omitempty" norman:"min=1,max=100"`
+	CPUThreshold  int               `json:"cpuThreshold,omitempty" norman:"min=1"`
 }
 
 type TargetPod struct {
-	ID           string `json:"id,omitempty"`
+	ID           string `json:"id,omitempty" norman:"required"`
 	IsRunning    bool   `json:"isRunning,omitempty"`
 	IsScheduled  bool   `json:"isScheduled,omitempty"`
-	RestartTimes int    `json:"restartTimes,omitempty"`
+	RestartTimes int    `json:"restartTimes,omitempty" norman:"min=1"`
 }
 
 type TargetWorkload struct {
 	ID                    string            `json:"id,omitempty"`
 	Selector              map[string]string `json:"selector,omitempty"`
-	UnavailablePercentage int               `json:"unavailablePercentage,omitempty"`
+	UnavailablePercentage int               `json:"unavailablePercentage,omitempty" norman:"required,min=1,max=100"`
 }
 
 type TargetSystemService struct {
-	Type string `json:"type,omitempty"`
+	Type string `json:"type,omitempty" norman:"required,options=dns|etcd|controller manager|network|scheduler,default=scheduler"`
 }
 
 type AlertStatus struct {
@@ -146,24 +146,24 @@ type NotifierSpec struct {
 }
 
 type SmtpConfig struct {
-	Host             string `json:"host,omitempty"`
-	Port             int    `json:"port,omitempty"`
-	Username         string `json:"username,omitempty"`
-	Password         string `json:"password,omitempty"`
-	DefaultRecipient string `json:"defaultRecipient,omitempty"`
-	TLS              bool   `json:"tls,omitempty"`
+	Host             string `json:"host,omitempty" norman:"required,type=dnsLabel"`
+	Port             int    `json:"port,omitempty" norman:"required,min=1,max=65535"`
+	Username         string `json:"username,omitempty" norman:"required"`
+	Password         string `json:"password,omitempty" norman:"required,type=masked"`
+	DefaultRecipient string `json:"defaultRecipient,omitempty" norman:"required"`
+	TLS              bool   `json:"tls,omitempty" norman:"required,default=true"`
 }
 
 type SlackConfig struct {
-	URL string `json:"url,omitempty"`
+	URL string `json:"url,omitempty" norman:"required"`
 }
 
 type PagerdutyConfig struct {
-	ServiceKey string `json:"serviceKey,omitempty"`
+	ServiceKey string `json:"serviceKey,omitempty" norman:"required"`
 }
 
 type WebhookConfig struct {
-	URL string `json:"url,omitempty"`
+	URL string `json:"url,omitempty" norman:"required"`
 }
 
 type NotifierStatus struct {

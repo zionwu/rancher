@@ -202,7 +202,10 @@ func logTypes(schema *types.Schemas) *types.Schemas {
 			m.DisplayName{}).
 		AddMapperForType(&Version, &v3.ProjectLogging{},
 			m.DisplayName{}).
-		MustImport(&Version, v3.ClusterLogging{}).
+		MustImportAndCustomize(&Version, v3.ClusterLogging{}, func(schema *types.Schema) {
+			schema.CollectionMethods = []string{"GET"}
+			schema.ResourceMethods = []string{"PUT"}
+		}).
 		MustImport(&Version, v3.ProjectLogging{})
 }
 
@@ -240,30 +243,6 @@ func alertTypes(schema *types.Schemas) *types.Schemas {
 		}).
 		MustImportAndCustomize(&Version, v3.ClusterAlert{}, func(schema *types.Schema) {
 
-			schema.MustCustomizeField("severity", func(f types.Field) types.Field {
-				f.Required = true
-				f.Type = "enum"
-				f.Options = []string{"info", "critical", "warning"}
-				return f
-			})
-			schema.MustCustomizeField("initialWaitSeconds", func(f types.Field) types.Field {
-				f.Required = true
-				f.Nullable = false
-				f.Default = 180
-				return f
-			})
-			schema.MustCustomizeField("repeatIntervalSeconds", func(f types.Field) types.Field {
-				f.Required = true
-				f.Nullable = false
-				f.Default = 3600
-				return f
-			})
-			schema.MustCustomizeField("recipientList", func(f types.Field) types.Field {
-				f.Required = true
-				f.Nullable = false
-				return f
-			})
-
 			schema.ResourceActions = map[string]types.Action{
 				"activate":   {},
 				"deactivate": {},
@@ -273,118 +252,12 @@ func alertTypes(schema *types.Schemas) *types.Schemas {
 		}).
 		MustImportAndCustomize(&Version, v3.ProjectAlert{}, func(schema *types.Schema) {
 
-			schema.MustCustomizeField("severity", func(f types.Field) types.Field {
-				f.Required = true
-				f.Type = "enum"
-				f.Options = []string{"info", "critical", "warning"}
-				return f
-			})
-			schema.MustCustomizeField("initialWaitSeconds", func(f types.Field) types.Field {
-				f.Required = true
-				f.Nullable = false
-				f.Default = 180
-				return f
-			})
-			schema.MustCustomizeField("repeatIntervalSeconds", func(f types.Field) types.Field {
-				f.Required = true
-				f.Nullable = false
-				f.Default = 3600
-				return f
-			})
-			schema.MustCustomizeField("recipientList", func(f types.Field) types.Field {
-				f.Required = true
-				f.Nullable = false
-				return f
-			})
-
 			schema.ResourceActions = map[string]types.Action{
 				"activate":   {},
 				"deactivate": {},
 				"mute":       {},
 				"unmute":     {},
 			}
-		}).
-		MustImportAndCustomize(&Version, v3.SmtpConfig{}, func(schema *types.Schema) {
-			schema.MustCustomizeField("host", func(field types.Field) types.Field {
-				field.Type = "dnsLabel"
-				field.Nullable = false
-				field.Required = true
-				return field
-			})
-			schema.MustCustomizeField("port", func(field types.Field) types.Field {
-				field.Nullable = false
-				field.Required = true
-				min := int64(1)
-				max := int64(65535)
-				field.Min = &min
-				field.Max = &max
-				return field
-			})
-			schema.MustCustomizeField("username", func(field types.Field) types.Field {
-				field.Nullable = false
-				field.Required = true
-				return field
-			})
-			schema.MustCustomizeField("password", func(field types.Field) types.Field {
-				field.Nullable = false
-				field.Required = true
-				field.Type = "masked"
-				return field
-			})
-			schema.MustCustomizeField("tls", func(field types.Field) types.Field {
-				field.Nullable = false
-				field.Required = true
-				return field
-			})
-		}).
-		MustImportAndCustomize(&Version, v3.SlackConfig{}, func(schema *types.Schema) {
-			schema.MustCustomizeField("url", func(field types.Field) types.Field {
-				field.Nullable = false
-				field.Required = true
-				return field
-			})
-		}).
-		MustImportAndCustomize(&Version, v3.WebhookConfig{}, func(schema *types.Schema) {
-			schema.MustCustomizeField("url", func(field types.Field) types.Field {
-				field.Nullable = false
-				field.Required = true
-				return field
-			})
-		}).
-		MustImportAndCustomize(&Version, v3.PagerdutyConfig{}, func(schema *types.Schema) {
-			schema.MustCustomizeField("serviceKey", func(field types.Field) types.Field {
-				field.Nullable = false
-				field.Required = true
-				field.Type = "masked"
-				return field
-			})
-		}).
-		MustImportAndCustomize(&Version, v3.TargetSystemService{}, func(schema *types.Schema) {
-			schema.MustCustomizeField("type", func(field types.Field) types.Field {
-				field.Type = "enum"
-				field.Options = []string{"dns", "etcd", "controller manager", "scheduler", "network"}
-				field.Nullable = false
-				field.Required = true
-				return field
-			})
-		}).
-		MustImportAndCustomize(&Version, v3.TargetWorkload{}, func(schema *types.Schema) {
-			schema.MustCustomizeField("unavailablePercentage", func(field types.Field) types.Field {
-				field.Nullable = false
-				field.Required = true
-				min := int64(1)
-				max := int64(100)
-				field.Min = &min
-				field.Max = &max
-				return field
-			})
-		}).
-		MustImportAndCustomize(&Version, v3.TargetPod{}, func(schema *types.Schema) {
-			schema.MustCustomizeField("id", func(field types.Field) types.Field {
-				field.Nullable = false
-				field.Required = true
-				return field
-			})
 		})
 
 }

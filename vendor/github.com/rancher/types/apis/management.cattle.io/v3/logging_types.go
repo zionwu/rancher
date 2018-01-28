@@ -40,7 +40,7 @@ type ProjectLogging struct {
 type LoggingCommonSpec struct {
 	DisplayName string `json:"displayName,omitempty"`
 
-	OutputFlushInterval int               `json:"outputFlushInterval"`
+	OutputFlushInterval int               `json:"outputFlushInterval" norman:"default=3"`
 	OutputTags          map[string]string `json:"outputTags"`
 
 	ElasticsearchConfig *ElasticsearchConfig `json:"elasticsearchConfig,omitempty"`
@@ -87,38 +87,39 @@ type LoggingCondition struct {
 }
 
 type ElasticsearchConfig struct {
-	Host         string `json:"host,omitempty"`
-	Port         int    `json:"port,omitempty"`
-	IndexPrefix  string `json:"indexPrefix,omitempty"`
-	DateFormat   string `json:"dateFormat,omitempty"`
+	Host         string `json:"host,omitempty" norman:"required"`
+	Port         int    `json:"port,omitempty" norman:"required,default=9200,min=1,max=65535"`
+	EnableTLS    bool   `json:"enableTLS,omitempty"`
+	IndexPrefix  string `json:"indexPrefix,omitempty" norman:"required"`
+	DateFormat   string `json:"dateFormat,omitempty" norman:"required,type=enum,options=YYYY-MM-DD|YYYY-MM|YYYY,default=YYYY-MM-DD"`
 	AuthUserName string `json:"authUsername,omitempty"` //secret
 	AuthPassword string `json:"authPassword,omitempty"` //secret
 }
 
 type SplunkConfig struct {
-	Host     string `json:"host,omitempty"`
-	Port     int    `json:"port,omitempty"`
-	Protocol string `json:"protocol,omitempty"`
-	Source   string `json:"source,omitempty"`
-	Token    string `json:"token,omitempty"` //secret
+	Host      string `json:"host,omitempty" norman:"required"`
+	Port      int    `json:"port,omitempty" norman:"required,default=8088,min=1,max=65535"`
+	EnableTLS bool   `json:"enableTLS,omitempty" norman:"default=false"`
+	Source    string `json:"source,omitempty"`
+	Token     string `json:"token,omitempty" norman:"required"` //secret
 }
 
 type EmbeddedConfig struct {
-	IndexPrefix string `json:"indexPrefix,omitempty"`
-	DateFormat  string `json:"dateFormat,omitempty"`
+	IndexPrefix string `json:"indexPrefix,omitempty" norman:"required"`
+	DateFormat  string `json:"dateFormat,omitempty" norman:"required,type=enum,options=YYYY-MM-DD|YYYY-MM|YYYY,default=YYYY-MM-DD"`
 }
 
 type KafkaConfig struct {
 	Zookeeper      *Zookeeper  `json:"zookeeper,omitempty"`
 	Broker         *BrokerList `json:"broker,omitempty"`
-	Topic          string      `json:"topic,omitempty"`
-	DataType       string      `json:"dataType,omitempty"`
-	MaxSendRetries int         `json:"maxSendRetries,omitempty"`
+	Topic          string      `json:"topic,omitempty" norman:"required"`
+	DataType       string      `json:"dataType,omitempty" norman:"required,type=enum,options=json|ltsv|msgpack,default=json"`
+	MaxSendRetries int         `json:"maxSendRetries,omitempty" norman:"default=3"`
 }
 
 type Zookeeper struct {
 	Host string `json:"host,omitempty"`
-	Port int    `json:"port,omitempty"`
+	Port int    `json:"port,omitempty" norman:"default=2181,min=1,max=65535"`
 }
 
 type BrokerList struct {
@@ -126,8 +127,8 @@ type BrokerList struct {
 }
 
 type SyslogConfig struct {
-	Host     string `json:"host,omitempty"`
-	Port     int    `json:"port,omitempty"`
-	Severity string `json:"severity,omitempty"`
+	Host     string `json:"host,omitempty" norman:"required"`
+	Port     int    `json:"port,omitempty" norman:"required,default=51400,min=1,max=65535"`
+	Severity string `json:"severity,omitempty" norman:"default=notice,type=enum,options=emerg|alert|crit|err|warning|notice|info|debug"`
 	Program  string `json:"program,omitempty"`
 }

@@ -38,14 +38,14 @@ type ClusterAlert struct {
 	CreatorID             string               `json:"creatorId,omitempty"`
 	Description           string               `json:"description,omitempty"`
 	DisplayName           string               `json:"displayName,omitempty"`
-	InitialWaitSeconds    int64                `json:"initialWaitSeconds,omitempty"`
+	InitialWaitSeconds    *int64               `json:"initialWaitSeconds,omitempty"`
 	Labels                map[string]string    `json:"labels,omitempty"`
 	Name                  string               `json:"name,omitempty"`
 	NamespaceId           string               `json:"namespaceId,omitempty"`
 	OwnerReferences       []OwnerReference     `json:"ownerReferences,omitempty"`
 	RecipientList         []Recipient          `json:"recipientList,omitempty"`
 	Removed               string               `json:"removed,omitempty"`
-	RepeatIntervalSeconds int64                `json:"repeatIntervalSeconds,omitempty"`
+	RepeatIntervalSeconds *int64               `json:"repeatIntervalSeconds,omitempty"`
 	Severity              string               `json:"severity,omitempty"`
 	State                 string               `json:"state,omitempty"`
 	Status                *AlertStatus         `json:"status,omitempty"`
