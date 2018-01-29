@@ -17,7 +17,7 @@ const (
 	ProjectAlertFieldNamespaceId           = "namespaceId"
 	ProjectAlertFieldOwnerReferences       = "ownerReferences"
 	ProjectAlertFieldProjectId             = "projectId"
-	ProjectAlertFieldRecipientList         = "recipientList"
+	ProjectAlertFieldRecipients            = "recipients"
 	ProjectAlertFieldRemoved               = "removed"
 	ProjectAlertFieldRepeatIntervalSeconds = "repeatIntervalSeconds"
 	ProjectAlertFieldSeverity              = "severity"
@@ -43,7 +43,7 @@ type ProjectAlert struct {
 	NamespaceId           string            `json:"namespaceId,omitempty"`
 	OwnerReferences       []OwnerReference  `json:"ownerReferences,omitempty"`
 	ProjectId             string            `json:"projectId,omitempty"`
-	RecipientList         []Recipient       `json:"recipientList,omitempty"`
+	Recipients            []Recipient       `json:"recipients,omitempty"`
 	Removed               string            `json:"removed,omitempty"`
 	RepeatIntervalSeconds *int64            `json:"repeatIntervalSeconds,omitempty"`
 	Severity              string            `json:"severity,omitempty"`

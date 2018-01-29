@@ -1,10 +1,10 @@
 package client
 
 const (
-	TargetSystemServiceType      = "targetSystemService"
-	TargetSystemServiceFieldType = "type"
+	TargetSystemServiceType           = "targetSystemService"
+	TargetSystemServiceFieldCondition = "condition"
 )
 
 type TargetSystemService struct {
-	Type string `json:"type,omitempty"`
+	Condition string `json:"condition,omitempty"`
 }

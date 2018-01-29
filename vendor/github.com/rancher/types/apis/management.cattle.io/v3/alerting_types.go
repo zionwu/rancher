@@ -39,7 +39,7 @@ type AlertCommonSpec struct {
 	DisplayName           string      `json:"displayName,omitempty" norman:"required"`
 	Description           string      `json:"description,omitempty"`
 	Severity              string      `json:"severity,omitempty" norman:"required,options=info|critical|warning,default=critical"`
-	RecipientList         []Recipient `json:"recipientList,omitempty" norman:"required"`
+	Recipients            []Recipient `json:"recipients,omitempty" norman:"required"`
 	InitialWaitSeconds    int         `json:"initialWaitSeconds,omitempty" norman:"required,default=180,min=0"`
 	RepeatIntervalSeconds int         `json:"repeatIntervalSeconds,omitempty"  norman:"required,default=3600,min=0"`
 }
@@ -70,7 +70,7 @@ type Recipient struct {
 type TargetNode struct {
 	ID            string            `json:"id,omitempty"`
 	Selector      map[string]string `json:"selector,omitempty"`
-	IsReady       bool              `json:"isReady,omitempty"`
+	Condition     string            `json:"condition,omitempty" norman:"required,options=notready|disk|mem|cpu,default=notready"`
 	DiskThreshold int               `json:"diskThreshold,omitempty" norman:"min=1,max=100"`
 	MemThreshold  int               `json:"memThreshold,omitempty" norman:"min=1,max=100"`
 	CPUThreshold  int               `json:"cpuThreshold,omitempty" norman:"min=1"`
@@ -78,8 +78,7 @@ type TargetNode struct {
 
 type TargetPod struct {
 	ID           string `json:"id,omitempty" norman:"required"`
-	IsRunning    bool   `json:"isRunning,omitempty"`
-	IsScheduled  bool   `json:"isScheduled,omitempty"`
+	Condition    string `json:"condition,omitempty" norman:"required,options=notrunning|notscheduled|restarts,default=notrunning"`
 	RestartTimes int    `json:"restartTimes,omitempty" norman:"min=1"`
 }
 
@@ -90,12 +89,12 @@ type TargetWorkload struct {
 }
 
 type TargetSystemService struct {
-	Type string `json:"type,omitempty" norman:"required,options=dns|etcd|controller manager|network|scheduler,default=scheduler"`
+	Condition string `json:"condition,omitempty" norman:"required,options=dns|etcd|controller manager|network|scheduler,default=scheduler"`
 }
 
 type AlertStatus struct {
 	StartedAt string `json:"startedAt,omitempty"`
-	State     string `json:"state,omitempty"`
+	State     string `json:"state,omitempty`
 
 	Conditions []AlertCondition `json:"conditions,omitempty"`
 }
@@ -155,7 +154,8 @@ type SmtpConfig struct {
 }
 
 type SlackConfig struct {
-	URL string `json:"url,omitempty" norman:"required"`
+	Channel string `json:"channel,omitempty" norman:"required"`
+	URL     string `json:"url,omitempty" norman:"required"`
 }
 
 type PagerdutyConfig struct {

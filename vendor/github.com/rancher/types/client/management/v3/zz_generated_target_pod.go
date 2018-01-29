@@ -2,13 +2,11 @@ package client
 
 const (
 	TargetPodType              = "targetPod"
-	TargetPodFieldIsRunning    = "isRunning"
-	TargetPodFieldIsScheduled  = "isScheduled"
+	TargetPodFieldCondition    = "condition"
 	TargetPodFieldRestartTimes = "restartTimes"
 )
 
 type TargetPod struct {
-	IsRunning    *bool  `json:"isRunning,omitempty"`
-	IsScheduled  *bool  `json:"isScheduled,omitempty"`
+	Condition    string `json:"condition,omitempty"`
 	RestartTimes *int64 `json:"restartTimes,omitempty"`
 }
