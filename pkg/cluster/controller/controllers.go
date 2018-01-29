@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 
+	alertController "github.com/rancher/rancher/pkg/alert/controller"
 	"github.com/rancher/rancher/pkg/cluster/controller/authz"
 	"github.com/rancher/rancher/pkg/cluster/controller/eventssyncer"
 	"github.com/rancher/rancher/pkg/cluster/controller/healthsyncer"
@@ -20,6 +21,7 @@ func Register(ctx context.Context, cluster *config.ClusterContext) error {
 	eventssyncer.Register(cluster)
 	secret.Register(cluster)
 	helmController.Register(cluster)
+	alertController.Register(cluster)
 
 	workloadContext := cluster.WorkloadContext()
 	return workloadController.Register(ctx, workloadContext)

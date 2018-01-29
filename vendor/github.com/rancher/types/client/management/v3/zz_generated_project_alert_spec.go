@@ -6,7 +6,7 @@ const (
 	ProjectAlertSpecFieldDisplayName           = "displayName"
 	ProjectAlertSpecFieldInitialWaitSeconds    = "initialWaitSeconds"
 	ProjectAlertSpecFieldProjectId             = "projectId"
-	ProjectAlertSpecFieldRecipientList         = "recipientList"
+	ProjectAlertSpecFieldRecipients            = "recipients"
 	ProjectAlertSpecFieldRepeatIntervalSeconds = "repeatIntervalSeconds"
 	ProjectAlertSpecFieldSeverity              = "severity"
 	ProjectAlertSpecFieldTargetPod             = "targetPod"
@@ -18,7 +18,7 @@ type ProjectAlertSpec struct {
 	DisplayName           string          `json:"displayName,omitempty"`
 	InitialWaitSeconds    *int64          `json:"initialWaitSeconds,omitempty"`
 	ProjectId             string          `json:"projectId,omitempty"`
-	RecipientList         []Recipient     `json:"recipientList,omitempty"`
+	Recipients            []Recipient     `json:"recipients,omitempty"`
 	RepeatIntervalSeconds *int64          `json:"repeatIntervalSeconds,omitempty"`
 	Severity              string          `json:"severity,omitempty"`
 	TargetPod             *TargetPod      `json:"targetPod,omitempty"`

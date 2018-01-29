@@ -6,7 +6,7 @@ const (
 	ClusterAlertSpecFieldDescription           = "description"
 	ClusterAlertSpecFieldDisplayName           = "displayName"
 	ClusterAlertSpecFieldInitialWaitSeconds    = "initialWaitSeconds"
-	ClusterAlertSpecFieldRecipientList         = "recipientList"
+	ClusterAlertSpecFieldRecipients            = "recipients"
 	ClusterAlertSpecFieldRepeatIntervalSeconds = "repeatIntervalSeconds"
 	ClusterAlertSpecFieldSeverity              = "severity"
 	ClusterAlertSpecFieldTargetNode            = "targetNode"
@@ -18,7 +18,7 @@ type ClusterAlertSpec struct {
 	Description           string               `json:"description,omitempty"`
 	DisplayName           string               `json:"displayName,omitempty"`
 	InitialWaitSeconds    *int64               `json:"initialWaitSeconds,omitempty"`
-	RecipientList         []Recipient          `json:"recipientList,omitempty"`
+	Recipients            []Recipient          `json:"recipients,omitempty"`
 	RepeatIntervalSeconds *int64               `json:"repeatIntervalSeconds,omitempty"`
 	Severity              string               `json:"severity,omitempty"`
 	TargetNode            *TargetNode          `json:"targetNode,omitempty"`

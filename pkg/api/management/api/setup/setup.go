@@ -10,6 +10,7 @@ import (
 	"github.com/rancher/norman/store/proxy"
 	"github.com/rancher/norman/store/subtype"
 	"github.com/rancher/norman/types"
+	"github.com/rancher/rancher/pkg/api/management/api/alert"
 	"github.com/rancher/rancher/pkg/api/management/api/authn"
 	"github.com/rancher/rancher/pkg/api/management/api/catalog"
 	"github.com/rancher/rancher/pkg/api/management/api/machine"
@@ -47,7 +48,7 @@ func Schemas(ctx context.Context, management *config.ManagementContext, schemas 
 	SecretTypes(schemas, management)
 	Stack(schemas, management)
 	Setting(schemas)
-	//Alert(schemas)
+	Alert(schemas, management)
 
 	secretStore, err := machineconfig.NewStore(management)
 	if err != nil {
@@ -220,4 +221,23 @@ func Stack(schemas *types.Schemas, management *config.ManagementContext) {
 func Setting(schemas *types.Schemas) {
 	schema := schemas.Schema(&managementschema.Version, client.SettingType)
 	schema.Formatter = setting.Formatter
+}
+
+func Alert(schemas *types.Schemas, management *config.ManagementContext) {
+
+	handler := &alert.Handler{
+		Management: *management,
+	}
+
+	schema := schemas.Schema(&managementschema.Version, client.ClusterAlertType)
+	schema.Formatter = alert.AlertFormatter
+	schema.ActionHandler = handler.ClusterActionHandler
+
+	schema = schemas.Schema(&managementschema.Version, client.ProjectAlertType)
+	schema.Formatter = alert.AlertFormatter
+	schema.ActionHandler = handler.ProjectActionHandler
+
+	schema = schemas.Schema(&managementschema.Version, client.NotifierType)
+	schema.CollectionFormatter = alert.NotifierCollectionFormatter
+	schema.ActionHandler = alert.NotifierActionHandler
 }
