@@ -1,8 +1,12 @@
 package controller
 
 import (
-	"github.com/rancher/rancher/pkg/alert/controller/configsyner"
+	"context"
+
+	"github.com/rancher/rancher/pkg/alert/controller/configsyncer"
 	"github.com/rancher/rancher/pkg/alert/controller/deploy"
+	"github.com/rancher/rancher/pkg/alert/controller/statesyncer"
+	"github.com/rancher/rancher/pkg/alert/manager"
 	"github.com/rancher/types/apis/management.cattle.io/v3"
 	"github.com/rancher/types/config"
 )
@@ -11,23 +15,30 @@ const (
 	alertManager = "alertmanager"
 )
 
-func Register(cluster *config.ClusterContext) {
+func Register(ctx context.Context, cluster *config.ClusterContext) {
+	alertmanager := manager.NewManager(cluster)
+
 	clusterAlertClient := cluster.Management.Management.ClusterAlerts(cluster.ClusterName)
+	projectAlertClient := cluster.Management.Management.ProjectAlerts("")
+	notifierClient := cluster.Management.Management.Notifiers("")
+
 	clusterAlertLifecycle := &ClusterAlertLifecycle{}
 	clusterAlertClient.AddLifecycle("cluster-alert-init-controller", clusterAlertLifecycle)
 
-	projectAlertClient := cluster.Management.Management.ProjectAlerts("")
 	projectAlertLifecycle := &ProjectAlertLifecycle{}
 	projectAlertClient.AddLifecycle("project-alert-init-controller", projectAlertLifecycle)
 
-	deployer := deploy.NewDeployer(cluster)
+	deployer := deploy.NewDeployer(cluster, alertmanager)
 	clusterAlertClient.AddClusterScopedHandler("cluster-alert-deployer", cluster.ClusterName, deployer.ClusterSync)
 	projectAlertClient.AddClusterScopedHandler("project-alert-deployer", cluster.ClusterName, deployer.ProjectSync)
 
-	configSyner := configsyner.NewConfigSyner(cluster)
-	clusterAlertClient.AddClusterScopedHandler("cluster-config-syner", cluster.ClusterName, configSyner.ClusterSync)
-	projectAlertClient.AddClusterScopedHandler("project-config-syner", cluster.ClusterName, configSyner.ProjectSync)
+	configSyncer := configsyner.NewConfigSyncer(cluster, alertmanager)
+	clusterAlertClient.AddClusterScopedHandler("cluster-config-syncer", cluster.ClusterName, configSyncer.ClusterSync)
+	projectAlertClient.AddClusterScopedHandler("project-config-syncer", cluster.ClusterName, configSyncer.ProjectSync)
+	notifierClient.AddClusterScopedHandler("notifier-config-syncer", cluster.ClusterName, configSyncer.NotifierSync)
 
+	stateSyncer := statesyncer.NewStateSyncer(cluster, alertmanager)
+	go stateSyncer.Run(ctx.Done())
 }
 
 type ClusterAlertLifecycle struct {

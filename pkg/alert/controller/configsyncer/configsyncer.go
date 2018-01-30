@@ -8,7 +8,7 @@ import (
 	"github.com/prometheus/common/model"
 	"github.com/rancher/norman/controller"
 	alertconfig "github.com/rancher/rancher/pkg/alert/config"
-	"github.com/rancher/rancher/pkg/alert/utils"
+	"github.com/rancher/rancher/pkg/alert/manager"
 	"github.com/rancher/types/apis/core/v1"
 	"github.com/rancher/types/apis/management.cattle.io/v3"
 	"github.com/rancher/types/config"
@@ -18,38 +18,40 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 )
 
-func NewConfigSyner(cluster *config.ClusterContext) *ConfigSyner {
-	return &ConfigSyner{
+func NewConfigSyncer(cluster *config.ClusterContext, manager *manager.Manager) *ConfigSyncer {
+	return &ConfigSyncer{
 		secretClient:       cluster.Core.Secrets("cattle-alerting"),
-		svcClient:          cluster.Core.Services(""),
 		clusterAlertLister: cluster.Management.Management.ClusterAlerts(cluster.ClusterName).Controller().Lister(),
 		projectAlertLister: cluster.Management.Management.ProjectAlerts("").Controller().Lister(),
 		notifierLister:     cluster.Management.Management.Notifiers(cluster.ClusterName).Controller().Lister(),
 		clusterName:        cluster.ClusterName,
-		nodeClient:         cluster.Core.Nodes(""),
+		alertManager:       manager,
 	}
 
 }
 
-type ConfigSyner struct {
+type ConfigSyncer struct {
 	secretClient       v1.SecretInterface
-	svcClient          v1.ServiceInterface
 	projectAlertLister v3.ProjectAlertLister
 	clusterAlertLister v3.ClusterAlertLister
 	notifierLister     v3.NotifierLister
-	nodeClient         v1.NodeInterface
 	clusterName        string
+	alertManager       *manager.Manager
 }
 
-func (d *ConfigSyner) ProjectSync(key string, alert *v3.ProjectAlert) error {
+func (d *ConfigSyncer) ProjectSync(key string, alert *v3.ProjectAlert) error {
 	return d.sync()
 }
 
-func (d *ConfigSyner) ClusterSync(key string, alert *v3.ClusterAlert) error {
+func (d *ConfigSyncer) ClusterSync(key string, alert *v3.ClusterAlert) error {
 	return d.sync()
 }
 
-func (d *ConfigSyner) sync() error {
+func (d *ConfigSyncer) NotifierSync(key string, alert *v3.Notifier) error {
+	return d.sync()
+}
+
+func (d *ConfigSyncer) sync() error {
 	logrus.Info("start sync config")
 
 	clusterAlerts, err := d.clusterAlertLister.List("", labels.NewSelector())
@@ -77,7 +79,7 @@ func (d *ConfigSyner) sync() error {
 		return errors.Wrapf(err, "Creating project alerts")
 	}
 
-	config := utils.GetDefaultConfig()
+	config := d.alertManager.GetDefaultConfig()
 	config.Global.PagerdutyURL = "https://events.pagerduty.com/generic/2010-04-15/create_event.json"
 
 	d.addClusterAlert2Config(config, clusterAlerts, notifiers)
@@ -104,9 +106,8 @@ func (d *ConfigSyner) sync() error {
 	}
 
 	go func() {
-		url := d.getAlertManagerEndpoint()
 		for i := 0; i < 10; i++ {
-			utils.ReloadConfiguration(url)
+			d.alertManager.ReloadConfiguration()
 			time.Sleep(10 * time.Second)
 		}
 
@@ -115,25 +116,7 @@ func (d *ConfigSyner) sync() error {
 	return nil
 }
 
-func (d *ConfigSyner) getAlertManagerEndpoint() string {
-	nodeList, err := d.nodeClient.List(metav1.ListOptions{})
-	if err != nil {
-		logrus.Errorf("Error occured while list node: %v", err)
-		return ""
-	}
-	//TODO: check correct way to make call to alertManager
-	ip := nodeList.Items[0].Status.Addresses[0].Address
-	svc, err := d.svcClient.GetNamespaced("cattle-alerting", "alertmanager", metav1.GetOptions{})
-	if err != nil {
-		logrus.Errorf("Error occured while get svc : %v", err)
-		return ""
-	}
-	port := svc.Spec.Ports[0].NodePort
-	url := "http://" + ip + ":" + strconv.Itoa(int(port))
-	return url
-}
-
-func (d *ConfigSyner) getNotifier(id string, notifiers []*v3.Notifier) *v3.Notifier {
+func (d *ConfigSyncer) getNotifier(id string, notifiers []*v3.Notifier) *v3.Notifier {
 
 	for _, n := range notifiers {
 		//TODO: check if this is correct
@@ -145,7 +128,7 @@ func (d *ConfigSyner) getNotifier(id string, notifiers []*v3.Notifier) *v3.Notif
 	return nil
 }
 
-func (d *ConfigSyner) addProjectAlert2Config(config *alertconfig.Config, alerts []*v3.ProjectAlert, notifiers []*v3.Notifier) {
+func (d *ConfigSyncer) addProjectAlert2Config(config *alertconfig.Config, alerts []*v3.ProjectAlert, notifiers []*v3.Notifier) {
 	for _, alert := range alerts {
 		if alert.Status.State == "inactive" {
 			continue
@@ -161,7 +144,7 @@ func (d *ConfigSyner) addProjectAlert2Config(config *alertconfig.Config, alerts 
 	}
 }
 
-func (d *ConfigSyner) addClusterAlert2Config(config *alertconfig.Config, alerts []*v3.ClusterAlert, notifiers []*v3.Notifier) {
+func (d *ConfigSyncer) addClusterAlert2Config(config *alertconfig.Config, alerts []*v3.ClusterAlert, notifiers []*v3.Notifier) {
 	for _, alert := range alerts {
 		if alert.Status.State == "inactive" {
 			continue
@@ -177,7 +160,7 @@ func (d *ConfigSyner) addClusterAlert2Config(config *alertconfig.Config, alerts 
 	}
 }
 
-func (d *ConfigSyner) addRoute(config *alertconfig.Config, id string, initalWait, repeatInterval int) {
+func (d *ConfigSyncer) addRoute(config *alertconfig.Config, id string, initalWait, repeatInterval int) {
 	routes := config.Route.Routes
 	if routes == nil {
 		routes = []*alertconfig.Route{}
@@ -190,17 +173,16 @@ func (d *ConfigSyner) addRoute(config *alertconfig.Config, id string, initalWait
 		Match:    match,
 	}
 
-	gw := model.Duration(time.Duration(initalWait))
+	gw := model.Duration(time.Duration(initalWait) * time.Second)
 	route.GroupWait = &gw
-	ri := model.Duration(time.Duration(repeatInterval))
+	ri := model.Duration(time.Duration(repeatInterval) * time.Second)
 	route.RepeatInterval = &ri
 
 	routes = append(routes, route)
 	config.Route.Routes = routes
-
 }
 
-func (d *ConfigSyner) addRecipients(notifiers []*v3.Notifier, receiver *alertconfig.Receiver, recipients []v3.Recipient) {
+func (d *ConfigSyncer) addRecipients(notifiers []*v3.Notifier, receiver *alertconfig.Receiver, recipients []v3.Recipient) {
 	for _, r := range recipients {
 		if r.NotifierId != "" {
 			notifier := d.getNotifier(r.NotifierId, notifiers)

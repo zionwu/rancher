@@ -2,7 +2,7 @@ package deploy
 
 import (
 	"github.com/pkg/errors"
-	"github.com/rancher/rancher/pkg/alert/utils"
+	"github.com/rancher/rancher/pkg/alert/manager"
 	"github.com/rancher/types/apis/apps/v1beta2"
 	"github.com/rancher/types/apis/core/v1"
 	"github.com/rancher/types/apis/management.cattle.io/v3"
@@ -15,12 +15,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func NewDeployer(cluster *config.ClusterContext) *Deployer {
+func NewDeployer(cluster *config.ClusterContext, manager *manager.Manager) *Deployer {
 	return &Deployer{
 		nsClient:     cluster.Core.Namespaces(""),
 		appsClient:   cluster.Apps.Deployments(""),
 		secretClient: cluster.Core.Secrets(""),
 		svcClient:    cluster.Core.Services(""),
+		alertManager: manager,
 	}
 
 }
@@ -30,6 +31,7 @@ type Deployer struct {
 	appsClient   v1beta2.DeploymentInterface
 	secretClient v1.SecretInterface
 	svcClient    v1.ServiceInterface
+	alertManager *manager.Manager
 }
 
 func (d *Deployer) ProjectSync(key string, alert *v3.ProjectAlert) error {
@@ -53,7 +55,7 @@ func (d *Deployer) deploy() error {
 		return errors.Wrapf(err, "Creating ns")
 	}
 
-	secret := getSecret()
+	secret := d.getSecret()
 	if _, err := d.secretClient.Create(secret); err != nil && !apierrors.IsAlreadyExists(err) {
 		logrus.Errorf("Error occured while create secret: %v", err)
 		return errors.Wrapf(err, "Creating secret")
@@ -74,8 +76,8 @@ func (d *Deployer) deploy() error {
 	return nil
 }
 
-func getSecret() *corev1.Secret {
-	cfg := utils.GetDefaultConfig()
+func (d *Deployer) getSecret() *corev1.Secret {
+	cfg := d.alertManager.GetDefaultConfig()
 	data, err := yaml.Marshal(cfg)
 	if err != nil {
 		return nil
