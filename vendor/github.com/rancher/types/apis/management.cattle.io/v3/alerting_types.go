@@ -94,7 +94,7 @@ type TargetSystemService struct {
 
 type AlertStatus struct {
 	StartedAt string `json:"startedAt,omitempty"`
-	State     string `json:"state,omitempty`
+	State     string `json:"state,omitempty" norman:"required,options=active|inactive|alerting|muted,default=notready"`
 
 	Conditions []AlertCondition `json:"conditions,omitempty"`
 }
@@ -148,14 +148,14 @@ type SmtpConfig struct {
 	Host             string `json:"host,omitempty" norman:"required,type=dnsLabel"`
 	Port             int    `json:"port,omitempty" norman:"required,min=1,max=65535"`
 	Username         string `json:"username,omitempty" norman:"required"`
-	Password         string `json:"password,omitempty" norman:"required,type=masked"`
+	Password         string `json:"password,omitempty" norman:"required"`
 	DefaultRecipient string `json:"defaultRecipient,omitempty" norman:"required"`
 	TLS              bool   `json:"tls,omitempty" norman:"required,default=true"`
 }
 
 type SlackConfig struct {
-	Channel string `json:"channel,omitempty" norman:"required"`
-	URL     string `json:"url,omitempty" norman:"required"`
+	DefaultRecipient string `json:"defaultRecipient,omitempty" norman:"required"`
+	URL              string `json:"url,omitempty" norman:"required"`
 }
 
 type PagerdutyConfig struct {

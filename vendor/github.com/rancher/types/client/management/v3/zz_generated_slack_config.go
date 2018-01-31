@@ -1,12 +1,12 @@
 package client
 
 const (
-	SlackConfigType         = "slackConfig"
-	SlackConfigFieldChannel = "channel"
-	SlackConfigFieldURL     = "url"
+	SlackConfigType                  = "slackConfig"
+	SlackConfigFieldDefaultRecipient = "defaultRecipient"
+	SlackConfigFieldURL              = "url"
 )
 
 type SlackConfig struct {
-	Channel string `json:"channel,omitempty"`
-	URL     string `json:"url,omitempty"`
+	DefaultRecipient string `json:"defaultRecipient,omitempty"`
+	URL              string `json:"url,omitempty"`
 }
