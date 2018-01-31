@@ -54,7 +54,7 @@ func (m *Manager) getAlertManagerEndpoint() string {
 func (m *Manager) ReloadConfiguration() error {
 	url := m.getAlertManagerEndpoint()
 	resp, err := http.Post(url+"/-/reload", "text/html", nil)
-	logrus.Infof("Reload  configuration for %s", url)
+	//logrus.Infof("Reload  configuration for %s", url)
 	if err != nil {
 		return err
 	}
@@ -199,7 +199,6 @@ func (m *Manager) AddSilenceRule(alertID string) error {
 }
 
 func (m *Manager) RemoveSilenceRule(alertID string) error {
-
 	url := m.getAlertManagerEndpoint()
 	res := struct {
 		Data   []*types.Silence `json:"data"`
@@ -247,9 +246,38 @@ func (m *Manager) RemoveSilenceRule(alertID string) error {
 			if err != nil {
 				return err
 			}
-
 		}
+	}
 
+	return nil
+}
+func (m *Manager) SendAlert(alertId, text, title, severity string) error {
+	url := m.getAlertManagerEndpoint()
+
+	alertList := model.Alerts{}
+	a := &model.Alert{}
+	a.Labels = map[model.LabelName]model.LabelValue{}
+	a.Labels[model.LabelName("alert_id")] = model.LabelValue(alertId)
+	a.Labels[model.LabelName("text")] = model.LabelValue(text)
+	a.Labels[model.LabelName("title")] = model.LabelValue(title)
+	a.Labels[model.LabelName("severity")] = model.LabelValue(severity)
+
+	alertList = append(alertList, a)
+
+	alertData, err := json.Marshal(alertList)
+	if err != nil {
+		return err
+	}
+
+	resp, err := http.Post(url+"/api/alerts", "application/json", bytes.NewBuffer(alertData))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	_, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err
 	}
 
 	return nil

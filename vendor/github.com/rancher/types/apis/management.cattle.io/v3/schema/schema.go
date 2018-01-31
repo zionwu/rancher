@@ -203,8 +203,8 @@ func logTypes(schema *types.Schemas) *types.Schemas {
 		AddMapperForType(&Version, &v3.ProjectLogging{},
 			m.DisplayName{}).
 		MustImportAndCustomize(&Version, v3.ClusterLogging{}, func(schema *types.Schema) {
-			schema.CollectionMethods = []string{"GET"}
-			schema.ResourceMethods = []string{"PUT"}
+			// schema.CollectionMethods = []string{"GET"}
+			// schema.ResourceMethods = []string{"PUT"}
 		}).
 		MustImport(&Version, v3.ProjectLogging{})
 }

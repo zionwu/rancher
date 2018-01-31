@@ -206,10 +206,10 @@ func (d *ConfigSyncer) addRecipients(notifiers []*v3.Notifier, receiver *alertco
 				slack := &alertconfig.SlackConfig{
 					APIURL:  alertconfig.Secret(notifier.Spec.SlackConfig.URL),
 					Channel: notifier.Spec.SlackConfig.DefaultRecipient,
-					Text:    "Resource Type:  {{ (index .Alerts 0).Labels.target_type}}\nResource Name:  {{ (index .Alerts 0).Labels.target_id}}\nNamespace:  {{ (index .Alerts 0).Labels.namespace}}\n",
-					Title:   "{{ (index .Alerts 0).Labels.description}}",
-					Pretext: "Alert From Rancher",
-					Color:   `{{ if eq (index .Alerts 0).Labels.severity "critical" }}danger{{ else if eq (index .Alerts 0).Labels.severity "warning" }}warning{{ else }}good{{ end }}`,
+					Text:    "{{ (index .Alerts 0).Labels.text}}\n",
+					Title:   "{{ (index .Alerts 0).Labels.title}}\n",
+					//Pretext: "Alert From Rancher",
+					Color: `{{ if eq (index .Alerts 0).Labels.severity "critical" }}danger{{ else if eq (index .Alerts 0).Labels.severity "warning" }}warning{{ else }}good{{ end }}`,
 				}
 				if r.Recipient != "" {
 					slack.Channel = r.Recipient

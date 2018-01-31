@@ -5,6 +5,7 @@ import (
 
 	"github.com/rancher/rancher/pkg/alert/controller/configsyncer"
 	"github.com/rancher/rancher/pkg/alert/controller/deploy"
+	"github.com/rancher/rancher/pkg/alert/controller/podwatcher"
 	"github.com/rancher/rancher/pkg/alert/controller/statesyncer"
 	"github.com/rancher/rancher/pkg/alert/manager"
 	"github.com/rancher/types/apis/management.cattle.io/v3"
@@ -39,6 +40,9 @@ func Register(ctx context.Context, cluster *config.ClusterContext) {
 
 	stateSyncer := statesyncer.NewStateSyncer(cluster, alertmanager)
 	go stateSyncer.Run(ctx.Done())
+
+	podWatcher := podwatcher.NewWatcher(cluster, alertmanager)
+	go podWatcher.Watch(ctx.Done())
 }
 
 type ClusterAlertLifecycle struct {
