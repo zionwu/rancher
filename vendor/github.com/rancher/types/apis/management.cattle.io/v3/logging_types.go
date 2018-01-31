@@ -106,6 +106,7 @@ type ElasticsearchConfig struct {
 
 type SplunkConfig struct {
 <<<<<<< HEAD
+<<<<<<< HEAD
 	Endpoint string `json:"endpoint,omitempty" norman:"required"`
 	Source   string `json:"source,omitempty"`
 	Token    string `json:"token,omitempty" norman:"required"` //secret
@@ -116,6 +117,11 @@ type SplunkConfig struct {
 	Source    string `json:"source,omitempty"`
 	Token     string `json:"token,omitempty" norman:"required"` //secret
 >>>>>>> update types
+=======
+	Endpoint string `json:"endpoint,omitempty" norman:"required"`
+	Source   string `json:"source,omitempty"`
+	Token    string `json:"token,omitempty" norman:"required"` //secret
+>>>>>>> update types
 }
 
 type EmbeddedConfig struct {
@@ -124,6 +130,7 @@ type EmbeddedConfig struct {
 }
 
 type KafkaConfig struct {
+<<<<<<< HEAD
 <<<<<<< HEAD
 	ZookeeperEndpoint string `json:"zookeeperEndpoint,omitempty"`
 	BrokerEndpoints   string `json:"brokerEndpoints,omitempty"`
@@ -152,6 +159,15 @@ type BrokerList struct {
 type SyslogConfig struct {
 	Host     string `json:"host,omitempty" norman:"required"`
 	Port     int    `json:"port,omitempty" norman:"required,default=51400,min=1,max=65535"`
+>>>>>>> update types
+=======
+	ZookeeperEndpoint string `json:"zookeeperEndpoint,omitempty"`
+	BrokerEndpoints   string `json:"brokerEndpoints,omitempty"`
+	Topic             string `json:"topic,omitempty" norman:"required"`
+}
+
+type SyslogConfig struct {
+	Endpoint string `json:"endpoint,omitempty" norman:"required"`
 >>>>>>> update types
 	Severity string `json:"severity,omitempty" norman:"default=notice,type=enum,options=emerg|alert|crit|err|warning|notice|info|debug"`
 	Program  string `json:"program,omitempty"`

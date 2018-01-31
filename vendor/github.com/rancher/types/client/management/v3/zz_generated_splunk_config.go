@@ -2,10 +2,14 @@ package client
 
 const (
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> update types
 	SplunkConfigType          = "splunkConfig"
 	SplunkConfigFieldEndpoint = "endpoint"
 	SplunkConfigFieldSource   = "source"
 	SplunkConfigFieldToken    = "token"
+<<<<<<< HEAD
 )
 
 type SplunkConfig struct {
@@ -27,5 +31,13 @@ type SplunkConfig struct {
 	Port      *int64 `json:"port,omitempty"`
 	Source    string `json:"source,omitempty"`
 	Token     string `json:"token,omitempty"`
+>>>>>>> update types
+=======
+)
+
+type SplunkConfig struct {
+	Endpoint string `json:"endpoint,omitempty"`
+	Source   string `json:"source,omitempty"`
+	Token    string `json:"token,omitempty"`
 >>>>>>> update types
 }

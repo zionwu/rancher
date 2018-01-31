@@ -204,11 +204,16 @@ func logTypes(schema *types.Schemas) *types.Schemas {
 			m.DisplayName{}).
 		MustImportAndCustomize(&Version, v3.ClusterLogging{}, func(schema *types.Schema) {
 <<<<<<< HEAD
+<<<<<<< HEAD
 			// schema.CollectionMethods = []string{"GET"}
 			// schema.ResourceMethods = []string{"PUT"}
 =======
 			schema.CollectionMethods = []string{"GET"}
 			schema.ResourceMethods = []string{"PUT"}
+>>>>>>> update types
+=======
+			// schema.CollectionMethods = []string{"GET"}
+			// schema.ResourceMethods = []string{"PUT"}
 >>>>>>> update types
 		}).
 		MustImport(&Version, v3.ProjectLogging{})

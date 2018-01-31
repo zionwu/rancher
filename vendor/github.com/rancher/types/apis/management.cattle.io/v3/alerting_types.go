@@ -127,10 +127,14 @@ type TargetSystemService struct {
 type AlertStatus struct {
 	StartedAt string `json:"startedAt,omitempty"`
 <<<<<<< HEAD
+<<<<<<< HEAD
 	State     string `json:"state,omitempty" norman:"required,options=active|inactive|alerting|muted,default=notready"`
 =======
 	State     string `json:"state,omitempty`
 >>>>>>> update types for alerting
+=======
+	State     string `json:"state,omitempty" norman:"required,options=active|inactive|alerting|muted,default=notready"`
+>>>>>>> update types
 
 	Conditions []AlertCondition `json:"conditions,omitempty"`
 }
@@ -185,15 +189,20 @@ type SmtpConfig struct {
 	Port             int    `json:"port,omitempty" norman:"required,min=1,max=65535"`
 	Username         string `json:"username,omitempty" norman:"required"`
 <<<<<<< HEAD
+<<<<<<< HEAD
 	Password         string `json:"password,omitempty" norman:"required"`
 =======
 	Password         string `json:"password,omitempty" norman:"required,type=masked"`
+>>>>>>> update types
+=======
+	Password         string `json:"password,omitempty" norman:"required"`
 >>>>>>> update types
 	DefaultRecipient string `json:"defaultRecipient,omitempty" norman:"required"`
 	TLS              bool   `json:"tls,omitempty" norman:"required,default=true"`
 }
 
 type SlackConfig struct {
+<<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
 	DefaultRecipient string `json:"defaultRecipient,omitempty" norman:"required"`
@@ -205,6 +214,10 @@ type SlackConfig struct {
 	Channel string `json:"channel,omitempty" norman:"required"`
 	URL     string `json:"url,omitempty" norman:"required"`
 >>>>>>> update types for alerting
+=======
+	DefaultRecipient string `json:"defaultRecipient,omitempty" norman:"required"`
+	URL              string `json:"url,omitempty" norman:"required"`
+>>>>>>> update types
 }
 
 type PagerdutyConfig struct {
