@@ -39,8 +39,16 @@ func (m *Manager) getAlertManagerEndpoint() string {
 		logrus.Errorf("Error occured while list node: %v", err)
 		return ""
 	}
+
 	//TODO: check correct way to make call to alertManager
-	ip := nodeList.Items[0].Status.Addresses[0].Address
+	if len(nodeList.Items) == 0 {
+		return ""
+	}
+	node := nodeList.Items[0]
+	if len(node.Status.Addresses) == 0 {
+		return ""
+	}
+	ip := node.Status.Addresses[0].Address
 	svc, err := m.svcClient.GetNamespaced("cattle-alerting", "alertmanager", metav1.GetOptions{})
 	if err != nil {
 		logrus.Errorf("Error occured while get svc : %v", err)
