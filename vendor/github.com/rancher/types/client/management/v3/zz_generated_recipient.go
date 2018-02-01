@@ -1,16 +1,14 @@
 package client
 
 const (
-	RecipientType                       = "recipient"
-	RecipientFieldCustomPagerDutyConfig = "customPagerdutyConfig"
-	RecipientFieldCustomWebhookConfig   = "customWebhookConfig"
-	RecipientFieldNotifierId            = "notifierId"
-	RecipientFieldRecipient             = "recipient"
+	RecipientType              = "recipient"
+	RecipientFieldNotifierId   = "notifierId"
+	RecipientFieldNotifierType = "notifierType"
+	RecipientFieldRecipient    = "recipient"
 )
 
 type Recipient struct {
-	CustomPagerDutyConfig *PagerdutyConfig `json:"customPagerdutyConfig,omitempty"`
-	CustomWebhookConfig   *WebhookConfig   `json:"customWebhookConfig,omitempty"`
-	NotifierId            string           `json:"notifierId,omitempty"`
-	Recipient             string           `json:"recipient,omitempty"`
+	NotifierId   string `json:"notifierId,omitempty"`
+	NotifierType string `json:"notifierType,omitempty"`
+	Recipient    string `json:"recipient,omitempty"`
 }

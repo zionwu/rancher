@@ -195,11 +195,17 @@ func (d *ConfigSyncer) addRecipients(notifiers []*v3.Notifier, receiver *alertco
 					ServiceKey:  alertconfig.Secret(notifier.Spec.PagerdutyConfig.ServiceKey),
 					Description: "{{ (index .Alerts 0).Labels.description}}",
 				}
+				if r.Recipient != "" {
+					pagerduty.ServiceKey = alertconfig.Secret(r.Recipient)
+				}
 				receiver.PagerdutyConfigs = append(receiver.PagerdutyConfigs, pagerduty)
 
 			} else if notifier.Spec.WebhookConfig != nil {
 				webhook := &alertconfig.WebhookConfig{
 					URL: notifier.Spec.WebhookConfig.URL,
+				}
+				if r.Recipient != "" {
+					webhook.URL = r.Recipient
 				}
 				receiver.WebhookConfigs = append(receiver.WebhookConfigs, webhook)
 			} else if notifier.Spec.SlackConfig != nil {
@@ -233,21 +239,6 @@ func (d *ConfigSyncer) addRecipients(notifiers []*v3.Notifier, receiver *alertco
 				receiver.EmailConfigs = append(receiver.EmailConfigs, email)
 			}
 
-		} else {
-			if r.CustomPagerDutyConfig != nil {
-				pagerduty := &alertconfig.PagerdutyConfig{
-					ServiceKey:  alertconfig.Secret(r.CustomPagerDutyConfig.ServiceKey),
-					Description: "{{ (index .Alerts 0).Labels.description}}",
-				}
-				receiver.PagerdutyConfigs = append(receiver.PagerdutyConfigs, pagerduty)
-			}
-
-			if r.CustomWebhookConfig != nil {
-				webhook := &alertconfig.WebhookConfig{
-					URL: r.CustomWebhookConfig.URL,
-				}
-				receiver.WebhookConfigs = append(receiver.WebhookConfigs, webhook)
-			}
 		}
 	}
 
