@@ -17,6 +17,7 @@ if echo $TAG | grep -q dirty; then
 fi
 
 cp ../bin/rancher .
+cp -r ../pkg/logging/template .
 
 IMAGE=${REPO}/server:${TAG}
 docker build --build-arg VERSION=${TAG} -t ${IMAGE} .

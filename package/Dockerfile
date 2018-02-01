@@ -22,6 +22,8 @@ ARG VERSION=dev
 ENV CATTLE_SERVER_VERSION ${VERSION}
 COPY rancher /usr/bin/
 
+COPY template /fluentd/etc/config/template
+
 ENV CATTLE_SERVER_IMAGE rancher/server
 VOLUME /var/lib/rancher
 ENTRYPOINT ["rancher", "--k8s-mode=exec", "--http-listen-port=80", "--https-listen-port=443"]
