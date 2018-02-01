@@ -9,5 +9,4 @@ const (
 type SlackConfig struct {
 	DefaultRecipient string `json:"defaultRecipient,omitempty"`
 	URL              string `json:"url,omitempty"`
-)
-
+}
