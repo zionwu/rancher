@@ -1,0 +1,31 @@
+apiVersion: management.cattle.io/v3
+kind: ClusterLogging
+metadata:
+  annotations:
+    field.cattle.io/creatorId: user-djtkh
+    lifecycle.cattle.io/create.cluster-logging-controller_local: "true"
+    lifecycle.cattle.io/create.logging-controller_local: "true"
+  clusterName: ""
+  creationTimestamp: 2018-01-29T22:29:32Z
+  finalizers:
+  - clusterscoped.controller.cattle.io/logging-controller_local
+  - clusterscoped.controller.cattle.io/cluster-logging-controller_local
+  generateName: clusterlogging-
+  generation: 0
+  name: clusterlogging-fvz57
+  namespace: local
+  resourceVersion: "39746"
+  selfLink: /apis/management.cattle.io/v3/namespaces/local/clusterloggings/clusterlogging-fvz57
+  uid: e0f3ba8e-0543-11e8-9e9a-0800279b302b
+spec:
+  clusterName: local
+  elasticsearchConfig:
+    dateFormat: YYYY
+    endpoint: myendpoint
+    indexPrefix: myindexPrefix3
+  embeddedConfig: null
+  kafkaConfig: null
+  outputFlushInterval: 4
+  outputTags: null
+  splunkConfig: null
+  syslogConfig: null
