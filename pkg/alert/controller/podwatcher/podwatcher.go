@@ -71,7 +71,7 @@ func (w *PodWatcher) Watch(stopc <-chan struct{}) {
 		case <-tickChan:
 			projectAlerts, err := w.projectAlertLister.List("", labels.NewSelector())
 			if err != nil {
-				logrus.Errorf("Error occured while getting project alerts: %v", err)
+				logrus.Infof("Failed to get project alerts: %v", err)
 				continue
 			}
 
@@ -90,7 +90,7 @@ func (w *PodWatcher) Watch(stopc <-chan struct{}) {
 					podId := parts[1]
 					pod, err := w.podLister.Get(ns, podId)
 					if err != nil {
-						logrus.Errorf("Error occured while getting pod %s: %v", alert.Spec.TargetPod.ID, err)
+						//logrus.Infof("Failed to get pod %s: %v", alert.Spec.TargetPod.ID, err)
 						continue
 					}
 
@@ -129,7 +129,7 @@ func (w *PodWatcher) checkPodRestarts(pod *corev1.Pod, alert *v3.ProjectAlert) {
 					details = containerStatus.State.Waiting.Message
 				}
 				title := fmt.Sprintf("The Pod %s restarts %s in 5 mins", pod.Name, strconv.Itoa(alert.Spec.TargetPod.RestartTimes))
-				desc := fmt.Sprintf("*Cluster Name*: %s\n*Namespace*: %s\n*Container Name*: %s\n*Logs*: %s", w.clusterName, pod.Namespace, containerStatus.Name, details)
+				desc := fmt.Sprintf("*Alert Name*: %s\n*Cluster Name*: %s\n*Namespace*: %s\n*Container Name*: %s\n*Logs*: %s", alert.Spec.DisplayName, w.clusterName, pod.Namespace, containerStatus.Name, details)
 
 				if err := w.alertManager.SendAlert(alertId, desc, title, alert.Spec.Severity); err != nil {
 					logrus.Errorf("Error occured while getting pod %s: %v", alert.Spec.TargetPod.ID, err)
@@ -168,7 +168,7 @@ func (w *PodWatcher) checkPodRunning(pod *corev1.Pod, alert *v3.ProjectAlert) {
 			}
 
 			title := fmt.Sprintf("The Pod %s is not running", pod.Name)
-			desc := fmt.Sprintf("*Cluster Name*: %s\n*Namespace*: %s\n*Container Name*: %s\n*Logs*: %s", w.clusterName, pod.Namespace, containerStatus.Name, details)
+			desc := fmt.Sprintf("*Alert Name*: %s\n*Cluster Name*: %s\n*Namespace*: %s\n*Container Name*: %s\n*Logs*: %s", alert.Spec.DisplayName, w.clusterName, pod.Namespace, containerStatus.Name, details)
 
 			if err := w.alertManager.SendAlert(alertId, desc, title, alert.Spec.Severity); err != nil {
 				logrus.Errorf("Error occured while getting pod %s: %v", alert.Spec.TargetPod.ID, err)
@@ -186,7 +186,7 @@ func (w *PodWatcher) checkPodScheduled(pod *corev1.Pod, alert *v3.ProjectAlert) 
 			details := condition.Message
 
 			title := fmt.Sprintf("The Pod %s is not scheduled", pod.Name)
-			desc := fmt.Sprintf("*Cluster Name*: %s\n*Namespace*: %s\n*Pod Name*: %s\n*Logs*: %s", w.clusterName, pod.Namespace, pod.Name, details)
+			desc := fmt.Sprintf("*Alert Name*: %s\n*Cluster Name*: %s\n*Namespace*: %s\n*Pod Name*: %s\n*Logs*: %s", alert.Spec.DisplayName, w.clusterName, pod.Namespace, pod.Name, details)
 
 			if err := w.alertManager.SendAlert(alertId, desc, title, alert.Spec.Severity); err != nil {
 				logrus.Errorf("Error occured while getting pod %s: %v", alert.Spec.TargetPod.ID, err)
