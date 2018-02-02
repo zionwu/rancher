@@ -11,40 +11,54 @@ import (
 
 	"github.com/prometheus/common/model"
 	alertconfig "github.com/rancher/rancher/pkg/alert/config"
-	"github.com/sirupsen/logrus"
 
 	"github.com/prometheus/alertmanager/dispatch"
 	"github.com/prometheus/alertmanager/types"
 	"github.com/rancher/types/apis/core/v1"
 	"github.com/rancher/types/config"
+	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
 )
 
 type Manager struct {
 	nodeClient v1.NodeInterface
 	svcClient  v1.ServiceInterface
+	podClient  v1.PodInterface
 }
 
 func NewManager(cluster *config.ClusterContext) *Manager {
 	return &Manager{
 		nodeClient: cluster.Core.Nodes(""),
 		svcClient:  cluster.Core.Services(""),
+		podClient:  cluster.Core.Pods("cattle-alerting"),
 	}
 }
 
 //TODO: optimized this
 func (m *Manager) getAlertManagerEndpoint() string {
-	nodeList, err := m.nodeClient.List(metav1.ListOptions{})
+
+	selector := labels.NewSelector()
+	r, _ := labels.NewRequirement("app", selection.Equals, []string{"alertmanager"})
+	selector.Add(*r)
+	pods, err := m.podClient.List(metav1.ListOptions{LabelSelector: selector.String()})
+	if err != nil {
+		logrus.Errorf("Error occured while get pod: %v", err)
+		return ""
+	}
+
+	if len(pods.Items) == 0 {
+		return ""
+	}
+
+	node, err := m.nodeClient.Get(pods.Items[0].Spec.NodeName, metav1.GetOptions{})
 	if err != nil {
 		logrus.Errorf("Error occured while list node: %v", err)
 		return ""
 	}
 
 	//TODO: check correct way to make call to alertManager
-	if len(nodeList.Items) == 0 {
-		return ""
-	}
-	node := nodeList.Items[0]
 	if len(node.Status.Addresses) == 0 {
 		return ""
 	}
