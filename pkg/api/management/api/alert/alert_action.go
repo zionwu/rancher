@@ -16,10 +16,19 @@ type Handler struct {
 }
 
 func AlertFormatter(apiContext *types.APIContext, resource *types.RawResource) {
-	resource.AddAction(apiContext, "activate")
-	resource.AddAction(apiContext, "deactivate")
-	resource.AddAction(apiContext, "mute")
-	resource.AddAction(apiContext, "unmute")
+	logrus.Info(resource.Values)
+	status := (resource.Values["status"]).(map[string]interface{})
+	state := status["state"].(string)
+	if state == "inactive" {
+		resource.AddAction(apiContext, "activate")
+	} else if state == "active" {
+		resource.AddAction(apiContext, "deactivate")
+
+	} else if state == "alerting" {
+		resource.AddAction(apiContext, "mute")
+	} else if state == "muted" {
+		resource.AddAction(apiContext, "unmute")
+	}
 }
 
 func (h *Handler) ClusterActionHandler(actionName string, action *types.Action, request *types.APIContext) error {

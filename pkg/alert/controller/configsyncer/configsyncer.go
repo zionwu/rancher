@@ -52,17 +52,17 @@ func (d *ConfigSyncer) NotifierSync(key string, alert *v3.Notifier) error {
 }
 
 func (d *ConfigSyncer) sync() error {
-	logrus.Info("start sync config")
+	//logrus.Info("start sync config")
 
 	clusterAlerts, err := d.clusterAlertLister.List("", labels.NewSelector())
 	if err != nil {
-		logrus.Errorf("Error occured while getting cluster alerts: %v", err)
+		logrus.Infof("Failed to gett cluster alerts: %v", err)
 		return errors.Wrapf(err, "Creating cluster alerts")
 	}
 
 	projectAlerts, err := d.projectAlertLister.List("", labels.NewSelector())
 	if err != nil {
-		logrus.Errorf("Error occured while getting project alerts: %v", err)
+		logrus.Infof("Failed to get project alerts: %v", err)
 		return errors.Wrapf(err, "Creating project alerts")
 	}
 
@@ -75,7 +75,7 @@ func (d *ConfigSyncer) sync() error {
 
 	notifiers, err := d.notifierLister.List("", labels.NewSelector())
 	if err != nil {
-		logrus.Errorf("Error occured while getting project notifier: %v", err)
+		logrus.Infof("Failed to get project notifier: %v", err)
 		return errors.Wrapf(err, "Creating project alerts")
 	}
 
@@ -86,22 +86,22 @@ func (d *ConfigSyncer) sync() error {
 	d.addProjectAlert2Config(config, pAlerts, notifiers)
 
 	data, err := yaml.Marshal(config)
-	logrus.Infof("after updating notifier: %s", string(data))
+	//logrus.Infof("after updating notifier: %s", string(data))
 	if err != nil {
-		logrus.Errorf("Error occured while marshal: %v", err)
+		logrus.Infof("Failed to marshal: %v", err)
 		return errors.Wrapf(err, "Marshal secrets")
 	}
 
 	configSecret, err := d.secretClient.Get("alertmanager", metav1.GetOptions{})
 	if err != nil {
-		logrus.Errorf("Error occured getting secret: %v", err)
+		logrus.Infof("Failed get secret: %v", err)
 		return errors.Wrapf(err, "Get secrets")
 	}
 
 	configSecret.Data["config.yml"] = data
 	_, err = d.secretClient.Update(configSecret)
 	if err != nil {
-		logrus.Errorf("Error occured while update secret: %v", err)
+		logrus.Infof("Failed to update secret: %v", err)
 		return errors.Wrapf(err, "Update secrets")
 	}
 
@@ -187,7 +187,7 @@ func (d *ConfigSyncer) addRecipients(notifiers []*v3.Notifier, receiver *alertco
 		if r.NotifierId != "" {
 			notifier := d.getNotifier(r.NotifierId, notifiers)
 			if notifier == nil {
-				logrus.Errorf("Can not find the notifier %s", r.NotifierId)
+				logrus.Infof("Can not find the notifier %s", r.NotifierId)
 				continue
 			}
 			if notifier.Spec.PagerdutyConfig != nil {
@@ -195,11 +195,17 @@ func (d *ConfigSyncer) addRecipients(notifiers []*v3.Notifier, receiver *alertco
 					ServiceKey:  alertconfig.Secret(notifier.Spec.PagerdutyConfig.ServiceKey),
 					Description: "{{ (index .Alerts 0).Labels.description}}",
 				}
+				if r.Recipient != "" {
+					pagerduty.ServiceKey = alertconfig.Secret(r.Recipient)
+				}
 				receiver.PagerdutyConfigs = append(receiver.PagerdutyConfigs, pagerduty)
 
 			} else if notifier.Spec.WebhookConfig != nil {
 				webhook := &alertconfig.WebhookConfig{
 					URL: notifier.Spec.WebhookConfig.URL,
+				}
+				if r.Recipient != "" {
+					webhook.URL = r.Recipient
 				}
 				receiver.WebhookConfigs = append(receiver.WebhookConfigs, webhook)
 			} else if notifier.Spec.SlackConfig != nil {
@@ -233,21 +239,6 @@ func (d *ConfigSyncer) addRecipients(notifiers []*v3.Notifier, receiver *alertco
 				receiver.EmailConfigs = append(receiver.EmailConfigs, email)
 			}
 
-		} else {
-			if r.CustomPagerDutyConfig != nil {
-				pagerduty := &alertconfig.PagerdutyConfig{
-					ServiceKey:  alertconfig.Secret(r.CustomPagerDutyConfig.ServiceKey),
-					Description: "{{ (index .Alerts 0).Labels.description}}",
-				}
-				receiver.PagerdutyConfigs = append(receiver.PagerdutyConfigs, pagerduty)
-			}
-
-			if r.CustomWebhookConfig != nil {
-				webhook := &alertconfig.WebhookConfig{
-					URL: r.CustomWebhookConfig.URL,
-				}
-				receiver.WebhookConfigs = append(receiver.WebhookConfigs, webhook)
-			}
 		}
 	}
 

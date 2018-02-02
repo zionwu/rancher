@@ -23,7 +23,6 @@ func NewDeployer(cluster *config.ClusterContext, manager *manager.Manager) *Depl
 		svcClient:    cluster.Core.Services(""),
 		alertManager: manager,
 	}
-
 }
 
 type Deployer struct {

@@ -38,7 +38,7 @@ func (s *StateSyncer) Run(stopc <-chan struct{}) {
 		case <-tickChan:
 			apiAlerts, err := s.alertManager.GetAlertList()
 			if err != nil {
-				logrus.Errorf("Error while getting alert list from alertmanager: %v", err)
+				logrus.Infof("Failed to retrieve alert list from alertmanager: %v", err)
 			} else {
 				clusterAlerts, err := s.clusterAlertClient.Controller().Lister().List("", labels.NewSelector())
 				if err != nil {

@@ -51,7 +51,7 @@ func (m *Manager) getAlertManagerEndpoint() string {
 	ip := node.Status.Addresses[0].Address
 	svc, err := m.svcClient.GetNamespaced("cattle-alerting", "alertmanager", metav1.GetOptions{})
 	if err != nil {
-		logrus.Errorf("Error occured while get svc : %v", err)
+		//logrus.Errorf("Error occured while get svc : %v", err)
 		return ""
 	}
 	port := svc.Spec.Ports[0].NodePort
