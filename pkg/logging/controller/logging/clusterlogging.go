@@ -5,7 +5,6 @@ import (
 
 	"github.com/pkg/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-
 	"github.com/rancher/types/apis/management.cattle.io/v3"
 	"github.com/rancher/types/config"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -256,6 +255,7 @@ func (c *ClusterLoggingLifecycle) createEmbeddedTarget(namespace string) error {
 	}
 	return nil
 }
+
 
 func (c *ClusterLoggingLifecycle) deleteEmbeddedTarget(namespace string) error {
 	//service account
