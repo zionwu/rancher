@@ -114,7 +114,7 @@ func NewESService(namespace string) *v1.Service {
 			Namespace: namespace,
 			Name:      EmbeddedESName,
 			Labels: map[string]string{
-				"app": EmbeddedESName,
+				"k8s-app": EmbeddedESName,
 			},
 		},
 		Spec: v1.ServiceSpec{
@@ -134,7 +134,7 @@ func NewESService(namespace string) *v1.Service {
 				},
 			},
 			Selector: map[string]string{
-				"app": EmbeddedESName,
+				"k8s-app": EmbeddedESName,
 			},
 		},
 	}
@@ -145,6 +145,9 @@ func NewKibanaService(namespace string) *v1.Service {
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: namespace,
 			Name:      EmbeddedKibanaName,
+			Labels: map[string]string{
+				"k8s-app": EmbeddedKibanaName,
+			},
 		},
 		Spec: v1.ServiceSpec{
 			Ports: []v1.ServicePort{
@@ -157,7 +160,7 @@ func NewKibanaService(namespace string) *v1.Service {
 			},
 			Type: v1.ServiceTypeNodePort,
 			Selector: map[string]string{
-				"app": EmbeddedKibanaName,
+				"k8s-app": EmbeddedKibanaName,
 			},
 		},
 	}
@@ -169,15 +172,21 @@ func NewESDeployment(namespace string) *v1beta2.Deployment {
 			Namespace: namespace,
 			Name:      EmbeddedESName,
 			Labels: map[string]string{
-				"app": EmbeddedESName,
+				"k8s-app": EmbeddedESName,
 			},
 		},
 		Spec: v1beta2.DeploymentSpec{
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"k8s-app": EmbeddedESName,
+				},
+			},
 			Replicas: int32Ptr(1),
 			Template: v1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
+					Namespace: namespace,
 					Labels: map[string]string{
-						"app": EmbeddedESName,
+						"k8s-app": EmbeddedESName,
 					},
 				},
 				Spec: v1.PodSpec{
@@ -272,9 +281,6 @@ func NewESDeployment(namespace string) *v1beta2.Deployment {
 							},
 						},
 					},
-					// NodeSelector: map[string]string{
-					// 	"embedded": "yes",
-					// },
 					RestartPolicy: v1.RestartPolicyAlways,
 				},
 			},
@@ -291,11 +297,17 @@ func NewKibanaDeployment(namespace string) *v1beta2.Deployment {
 			Name:      EmbeddedKibanaName,
 		},
 		Spec: v1beta2.DeploymentSpec{
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"k8s-app": EmbeddedKibanaName,
+				},
+			},
 			Replicas: int32Ptr(1),
 			Template: v1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
+					Namespace: namespace,
 					Labels: map[string]string{
-						"app": EmbeddedKibanaName,
+						"k8s-app": EmbeddedKibanaName,
 					},
 				},
 				Spec: v1.PodSpec{

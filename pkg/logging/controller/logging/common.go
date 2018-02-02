@@ -34,11 +34,9 @@ const (
 )
 
 var (
-	basePath            = "/fluentd/etc/config"
-	clusterConfigPath   = basePath + "/template/cluster.conf"
-	clusterTemplatePath = basePath + "/template/cluster_template.conf"
-	projectConfigPath   = basePath + "/template/project.conf"
-	projectTemplatePath = basePath + "/template/project_template.conf"
+	basePath          = "/tmp"
+	clusterConfigPath = basePath + "/cluster.conf"
+	projectConfigPath = basePath + "/project.conf"
 )
 
 type WrapClusterLogging struct {
@@ -126,7 +124,7 @@ func toWrapClusterLogging(currentTarget string, clusterLogging v3.ClusterLogging
 	}
 
 	if clusterLogging.EmbeddedConfig != nil {
-		wp.EmbeddedConfig.DateFormat = getDateFormat(clusterLogging.EmbeddedConfig.DateFormat)
+		wp.WrapEmbedded.DateFormat = getDateFormat(clusterLogging.EmbeddedConfig.DateFormat)
 	}
 	return &wp, nil
 }
@@ -167,6 +165,7 @@ func toWrapProjectLogging(currentTarget, grepNamespace string, projectLogging v3
 			return nil, errors.Wrapf(err, "parse endpoint failed %s", projectLogging.SplunkConfig.Endpoint)
 		}
 		wp.WrapSplunk = WrapSplunk{
+			Server: u.Host,
 			Scheme: u.Scheme,
 		}
 	}
@@ -233,7 +232,12 @@ func createFluentd(corev1 typedv1.CoreV1Interface, rbacv1beta1 rbacv1beta1.RbacV
 }
 
 func removeFluentd(corev1 typedv1.CoreV1Interface, rbacv1beta1 rbacv1beta1.RbacV1beta1Interface, appv1beta2 appsv1beta2.AppsV1beta2Interface) {
-	err := corev1.ServiceAccounts(loggingconfig.LoggingNamespace).Delete(loggingconfig.FluentdName, &metav1.DeleteOptions{})
+	deleteOp := metav1.DeletePropagationBackground
+	err := appv1beta2.DaemonSets(loggingconfig.LoggingNamespace).Delete(loggingconfig.FluentdName, &metav1.DeleteOptions{PropagationPolicy: &deleteOp})
+	if err != nil && !apierrors.IsNotFound(err) {
+		logrus.Errorf("delete DaemonSets %s failed", loggingconfig.FluentdName)
+	}
+	err = corev1.ServiceAccounts(loggingconfig.LoggingNamespace).Delete(loggingconfig.FluentdName, &metav1.DeleteOptions{})
 	if err != nil && !apierrors.IsNotFound(err) {
 		logrus.Errorf("delete ServiceAccount %s failed", loggingconfig.FluentdName)
 	}
@@ -241,15 +245,12 @@ func removeFluentd(corev1 typedv1.CoreV1Interface, rbacv1beta1 rbacv1beta1.RbacV
 	if err != nil && !apierrors.IsNotFound(err) {
 		logrus.Errorf("delete ClusterRoleBindings %s failed", loggingconfig.FluentdName)
 	}
-	err = appv1beta2.DaemonSets(loggingconfig.LoggingNamespace).Delete(loggingconfig.FluentdName, &metav1.DeleteOptions{})
-	if err != nil && !apierrors.IsNotFound(err) {
-		logrus.Errorf("delete DaemonSets %s failed", loggingconfig.FluentdName)
-	}
 }
 
 func updateConfigMap(configPath, loggingName, level string, corev1 typedv1.CoreV1Interface) error {
 	configMap, err := k8sutils.BuildConfigMap(configPath, loggingconfig.LoggingNamespace, loggingName, level)
 	if err != nil {
+		logrus.Errorf("BuildConfigMap failed %v", err)
 		return errors.Wrap(err, "BuildConfigMap failed")
 	}
 	existConfig, err := corev1.ConfigMaps(loggingconfig.LoggingNamespace).Get(loggingName, metav1.GetOptions{})
@@ -317,21 +318,34 @@ func InitData(corev1Client typedv1.CoreV1Interface) error {
 	return nil
 }
 
-func isAllLoggingDisable(clusterLoggingClient v3.ClusterLoggingInterface, projectLoggingClient v3.ProjectLoggingInterface) (bool, error) {
+func isAllLoggingDisable(clusterLoggingClient v3.ClusterLoggingInterface, projectLoggingClient v3.ProjectLoggingInterface, excludeClusterLogging, excludeProjectLogging string) (bool, error) {
 	clusterLogging, err := clusterLoggingClient.List(metav1.ListOptions{})
 	if err != nil {
 		return false, err
 	}
+	existClusterLogging := len(clusterLogging.Items)
+	for _, v := range clusterLogging.Items {
+		if v.Name == excludeClusterLogging {
+			existClusterLogging = existClusterLogging - 1
+		}
+	}
+
 	projectLogging, err := projectLoggingClient.List(metav1.ListOptions{})
 	if err != nil {
 		return false, err
 	}
-	return len(clusterLogging.Items) == 0 && len(projectLogging.Items) == 0, nil
+	existProjectLogging := len(projectLogging.Items)
+	for _, v := range projectLogging.Items {
+		if v.Name == excludeProjectLogging {
+			existProjectLogging = existProjectLogging - 1
+		}
+	}
+	return existClusterLogging == 0 && existProjectLogging == 0, nil
 
 }
 
-func removeAllLogging(corev1 typedv1.CoreV1Interface, rbacv1beta1 rbacv1beta1.RbacV1beta1Interface, appv1beta2 appsv1beta2.AppsV1beta2Interface, clusterLoggingClient v3.ClusterLoggingInterface, projectLoggingClient v3.ProjectLoggingInterface) error {
-	allDisabled, err := isAllLoggingDisable(clusterLoggingClient, projectLoggingClient)
+func removeAllLogging(corev1 typedv1.CoreV1Interface, rbacv1beta1 rbacv1beta1.RbacV1beta1Interface, appv1beta2 appsv1beta2.AppsV1beta2Interface, clusterLoggingClient v3.ClusterLoggingInterface, projectLoggingClient v3.ProjectLoggingInterface, excludeClusterLogging, excludeProjectLogging string) error {
+	allDisabled, err := isAllLoggingDisable(clusterLoggingClient, projectLoggingClient, excludeClusterLogging, excludeProjectLogging)
 	if err != nil {
 		return err
 	}

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 
 	"github.com/rancher/types/apis/management.cattle.io/v3"
 	"github.com/rancher/types/config"
@@ -14,6 +15,7 @@ import (
 	rbacv1beta1 "k8s.io/client-go/kubernetes/typed/rbac/v1beta1"
 
 	loggingconfig "github.com/rancher/rancher/pkg/logging/config"
+	"github.com/rancher/rancher/pkg/logging/generator"
 )
 
 type ProjectLoggingLifecycle struct {
@@ -53,9 +55,10 @@ func (c *ProjectLoggingLifecycle) Create(obj *v3.ProjectLogging) (*v3.ProjectLog
 func (c *ProjectLoggingLifecycle) Remove(obj *v3.ProjectLogging) (*v3.ProjectLogging, error) {
 	err := createOrUpdateProjectConfigMap(c.projectLoggingClient, c.corev1, obj.Name)
 	if err != nil {
+		logrus.Errorf("before remove project logging update configmap error %s", err)
 		return nil, err
 	}
-	return obj, removeAllLogging(c.corev1, c.rbacv1beta1, c.appv1beta2, c.clusterLoggingClient, c.projectLoggingClient)
+	return obj, removeAllLogging(c.corev1, c.rbacv1beta1, c.appv1beta2, c.clusterLoggingClient, c.projectLoggingClient, "", obj.Name)
 }
 
 func (c *ProjectLoggingLifecycle) Updated(obj *v3.ProjectLogging) (*v3.ProjectLogging, error) {
@@ -101,7 +104,7 @@ func generateProjectConfigFile(projectLoggingClient v3.ProjectLoggingInterface, 
 	}
 	conf := make(map[string]interface{})
 	conf["projectTargets"] = wl
-	return generateConfigFile(projectConfigPath, projectTemplatePath, conf)
+	return generator.GenerateConfigFile(projectConfigPath, generator.ProjectTemplate, "project", conf)
 }
 
 func getProjectTarget(spec *v3.ProjectLoggingSpec) string {

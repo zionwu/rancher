@@ -4,6 +4,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/pkg/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"github.com/rancher/types/apis/management.cattle.io/v3"
 	"github.com/rancher/types/config"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -13,6 +14,7 @@ import (
 	rbacv1beta1 "k8s.io/client-go/kubernetes/typed/rbac/v1beta1"
 
 	loggingconfig "github.com/rancher/rancher/pkg/logging/config"
+	"github.com/rancher/rancher/pkg/logging/generator"
 	"github.com/rancher/rancher/pkg/logging/k8sutils"
 )
 
@@ -40,13 +42,17 @@ func RegisterClusterLogging(cluster *config.ClusterContext) {
 }
 
 func (c *ClusterLoggingLifecycle) Create(obj *v3.ClusterLogging) (*v3.ClusterLogging, error) {
-	target := getClusterTarget(&obj.Spec)
-	if target == "embedded" {
-		c.createEmbeddedTarget(loggingconfig.LoggingNamespace)
+	if getClusterTarget(&obj.Spec) == "embedded" {
+		err := c.createEmbeddedTarget(loggingconfig.LoggingNamespace)
+		if err != nil {
+			logrus.Errorf("create cluster logging embedded target error %v", err)
+			return nil, err
+		}
 	}
 
 	err := createOrUpdateClusterConfigMap(c.clusterLoggingClient, c.corev1, "")
 	if err != nil {
+		logrus.Errorf("create or update cluster logging configmap error %s", err)
 		return nil, err
 	}
 
@@ -56,15 +62,30 @@ func (c *ClusterLoggingLifecycle) Create(obj *v3.ClusterLogging) (*v3.ClusterLog
 func (c *ClusterLoggingLifecycle) Remove(obj *v3.ClusterLogging) (*v3.ClusterLogging, error) {
 	err := createOrUpdateClusterConfigMap(c.clusterLoggingClient, c.corev1, obj.Name)
 	if err != nil {
+		logrus.Errorf("before remove cluster logging, update configmap failed %s", err)
 		return nil, err
 	}
-	return obj, removeAllLogging(c.corev1, c.rbacv1beta1, c.appv1beta2, c.clusterLoggingClient, c.projectLoggingClient)
+	err = c.deleteEmbeddedTarget(loggingconfig.LoggingNamespace)
+	if err != nil {
+		logrus.Errorf("remove embedded es and kibana failed %s", err)
+		return nil, err
+	}
+	return obj, removeAllLogging(c.corev1, c.rbacv1beta1, c.appv1beta2, c.clusterLoggingClient, c.projectLoggingClient, obj.Name, "")
 }
 
 func (c *ClusterLoggingLifecycle) Updated(obj *v3.ClusterLogging) (*v3.ClusterLogging, error) {
-	target := getClusterTarget(&obj.Spec)
-	if target == "embedded" {
-		c.createEmbeddedTarget(loggingconfig.LoggingNamespace)
+	if getClusterTarget(&obj.Spec) == "embedded" {
+		err := c.createEmbeddedTarget(loggingconfig.LoggingNamespace)
+		if err != nil {
+			logrus.Errorf("create cluster logging embedded target error %v", err)
+			return nil, err
+		}
+	} else {
+		err := c.deleteEmbeddedTarget(loggingconfig.LoggingNamespace)
+		if err != nil {
+			logrus.Errorf("remove embedded es and kibana failed %s", err)
+			return nil, err
+		}
 	}
 
 	return obj, createOrUpdateClusterConfigMap(c.clusterLoggingClient, c.corev1, "")
@@ -86,7 +107,7 @@ func generateClusterConfigFile(clusterLoggingClient v3.ClusterLoggingInterface, 
 		return err
 	}
 	conf["clusterTarget"] = wpClusterlogging
-	return generateConfigFile(clusterConfigPath, clusterTemplatePath, conf)
+	return generator.GenerateConfigFile(clusterConfigPath, generator.ClusterTemplate, "cluster", conf)
 }
 
 func createOrUpdateClusterConfigMap(clusterLoggingClient v3.ClusterLoggingInterface, corev1 typedv1.CoreV1Interface, exclude string) error {
@@ -94,7 +115,6 @@ func createOrUpdateClusterConfigMap(clusterLoggingClient v3.ClusterLoggingInterf
 	if err != nil {
 		return errors.Wrap(err, "generate cluster config file failed")
 	}
-
 	return updateConfigMap(clusterConfigPath, loggingconfig.ClusterLoggingName, "cluster", corev1)
 }
 
@@ -236,55 +256,57 @@ func (c *ClusterLoggingLifecycle) createEmbeddedTarget(namespace string) error {
 	return nil
 }
 
-func (c *ClusterLoggingLifecycle) DeleteEmbeddedTarget(namespace string) error {
+
+func (c *ClusterLoggingLifecycle) deleteEmbeddedTarget(namespace string) error {
 	//service account
 	err := c.corev1.ServiceAccounts(namespace).Delete(k8sutils.EmbeddedESName, &metav1.DeleteOptions{})
-	if err != nil {
+	if err != nil && !apierrors.IsNotFound(err) {
 		return errors.Wrapf(err, "delete service account %s fail", k8sutils.EmbeddedESName)
 	}
 	err = c.corev1.ServiceAccounts(namespace).Delete(k8sutils.EmbeddedKibanaName, &metav1.DeleteOptions{})
-	if err != nil {
+	if err != nil && !apierrors.IsNotFound(err) {
 		return errors.Wrapf(err, "delete service account %s fail", k8sutils.EmbeddedKibanaName)
 	}
 
 	//role
 	err = c.rbacv1beta1.Roles(namespace).Delete(k8sutils.EmbeddedESName, &metav1.DeleteOptions{})
-	if err != nil {
+	if err != nil && !apierrors.IsNotFound(err) {
 		return errors.Wrapf(err, "delete role %s fail", k8sutils.EmbeddedESName)
 	}
 	err = c.rbacv1beta1.Roles(namespace).Delete(k8sutils.EmbeddedKibanaName, &metav1.DeleteOptions{})
-	if err != nil {
+	if err != nil && !apierrors.IsNotFound(err) {
 		return errors.Wrapf(err, "delete role %s fail", k8sutils.EmbeddedKibanaName)
 	}
 
 	//rolebinding
 	err = c.rbacv1beta1.RoleBindings(namespace).Delete(k8sutils.EmbeddedESName, &metav1.DeleteOptions{})
-	if err != nil {
+	if err != nil && !apierrors.IsNotFound(err) {
 		return errors.Wrapf(err, "delete role %s fail", k8sutils.EmbeddedESName)
 	}
 	err = c.rbacv1beta1.RoleBindings(namespace).Delete(k8sutils.EmbeddedKibanaName, &metav1.DeleteOptions{})
-	if err != nil {
+	if err != nil && !apierrors.IsNotFound(err) {
 		return errors.Wrapf(err, "delete role %s fail", k8sutils.EmbeddedKibanaName)
 	}
 
 	//service
 	err = c.corev1.Services(namespace).Delete(k8sutils.EmbeddedESName, &metav1.DeleteOptions{})
-	if err != nil {
+	if err != nil && !apierrors.IsNotFound(err) {
 		return errors.Wrapf(err, "delete service %s fail", k8sutils.EmbeddedESName)
 	}
 	err = c.corev1.Services(namespace).Delete(k8sutils.EmbeddedKibanaName, &metav1.DeleteOptions{})
-	if err != nil {
+	if err != nil && !apierrors.IsNotFound(err) {
 		return errors.Wrapf(err, "delete service %s fail", k8sutils.EmbeddedKibanaName)
 	}
 
 	//deployment
-	err = c.appv1beta2.Deployments(namespace).Delete(k8sutils.EmbeddedESName, &metav1.DeleteOptions{})
-	if err != nil {
+	deleteOp := metav1.DeletePropagationBackground
+	err = c.appv1beta2.Deployments(namespace).Delete(k8sutils.EmbeddedESName, &metav1.DeleteOptions{PropagationPolicy: &deleteOp})
+	if err != nil && !apierrors.IsNotFound(err) {
 		return errors.Wrapf(err, "delete deployment %s fail", k8sutils.EmbeddedESName)
 	}
 
-	err = c.appv1beta2.Deployments(namespace).Delete(k8sutils.EmbeddedKibanaName, &metav1.DeleteOptions{})
-	if err != nil {
+	err = c.appv1beta2.Deployments(namespace).Delete(k8sutils.EmbeddedKibanaName, &metav1.DeleteOptions{PropagationPolicy: &deleteOp})
+	if err != nil && !apierrors.IsNotFound(err) {
 		return errors.Wrapf(err, "delete deployment %s fail", k8sutils.EmbeddedKibanaName)
 	}
 	return nil

@@ -23,8 +23,8 @@ func Register(ctx context.Context, cluster *config.ClusterContext) error {
 	eventssyncer.Register(cluster)
 	secret.Register(cluster)
 	helmController.Register(cluster)
-	alertController.Register(ctx, cluster)
 	loggingController.Register(cluster)
+	alertController.Register(ctx, cluster)
 	workloadContext := cluster.WorkloadContext()
 	return workloadController.Register(ctx, workloadContext)
 }
