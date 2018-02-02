@@ -4,9 +4,9 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/pkg/errors"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"github.com/rancher/types/apis/management.cattle.io/v3"
 	"github.com/rancher/types/config"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	appsv1beta2 "k8s.io/client-go/kubernetes/typed/apps/v1beta2"
@@ -18,7 +18,7 @@ import (
 	"github.com/rancher/rancher/pkg/logging/k8sutils"
 )
 
-type ClusterLoggingLifecycle struct {
+type ClusterLoggingSyncer struct {
 	management           config.ManagementContext
 	appv1beta2           appsv1beta2.AppsV1beta2Interface
 	corev1               typedv1.CoreV1Interface
@@ -29,7 +29,7 @@ type ClusterLoggingLifecycle struct {
 
 func RegisterClusterLogging(cluster *config.ClusterContext) {
 	clusterloggingClient := cluster.Management.Management.ClusterLoggings("")
-	lifecycle := &ClusterLoggingLifecycle{
+	syncer := &ClusterLoggingSyncer{
 		rbacv1beta1:          cluster.K8sClient.RbacV1beta1(),
 		management:           *cluster.Management,
 		appv1beta2:           cluster.K8sClient.AppsV1beta2(),
@@ -38,57 +38,47 @@ func RegisterClusterLogging(cluster *config.ClusterContext) {
 		projectLoggingClient: cluster.Management.Management.ProjectLoggings(""),
 	}
 
-	clusterloggingClient.AddClusterScopedLifecycle("cluster-logging-controller", cluster.ClusterName, lifecycle)
+	clusterloggingClient.AddClusterScopedHandler("cluster-logging-controller", cluster.ClusterName, syncer.Sync)
 }
 
-func (c *ClusterLoggingLifecycle) Create(obj *v3.ClusterLogging) (*v3.ClusterLogging, error) {
+func (c *ClusterLoggingSyncer) Sync(key string, obj *v3.ClusterLogging) error {
+	logrus.Info("-----------inside cluster logging sync")
 	if getClusterTarget(&obj.Spec) == "embedded" {
 		err := c.createEmbeddedTarget(loggingconfig.LoggingNamespace)
 		if err != nil {
 			logrus.Errorf("create cluster logging embedded target error %v", err)
-			return nil, err
-		}
-	}
-
-	err := createOrUpdateClusterConfigMap(c.clusterLoggingClient, c.corev1, "")
-	if err != nil {
-		logrus.Errorf("create or update cluster logging configmap error %s", err)
-		return nil, err
-	}
-
-	return obj, createFluentd(c.corev1, c.rbacv1beta1, c.appv1beta2)
-}
-
-func (c *ClusterLoggingLifecycle) Remove(obj *v3.ClusterLogging) (*v3.ClusterLogging, error) {
-	err := createOrUpdateClusterConfigMap(c.clusterLoggingClient, c.corev1, obj.Name)
-	if err != nil {
-		logrus.Errorf("before remove cluster logging, update configmap failed %s", err)
-		return nil, err
-	}
-	err = c.deleteEmbeddedTarget(loggingconfig.LoggingNamespace)
-	if err != nil {
-		logrus.Errorf("remove embedded es and kibana failed %s", err)
-		return nil, err
-	}
-	return obj, removeAllLogging(c.corev1, c.rbacv1beta1, c.appv1beta2, c.clusterLoggingClient, c.projectLoggingClient, obj.Name, "")
-}
-
-func (c *ClusterLoggingLifecycle) Updated(obj *v3.ClusterLogging) (*v3.ClusterLogging, error) {
-	if getClusterTarget(&obj.Spec) == "embedded" {
-		err := c.createEmbeddedTarget(loggingconfig.LoggingNamespace)
-		if err != nil {
-			logrus.Errorf("create cluster logging embedded target error %v", err)
-			return nil, err
+			return err
 		}
 	} else {
 		err := c.deleteEmbeddedTarget(loggingconfig.LoggingNamespace)
 		if err != nil {
 			logrus.Errorf("remove embedded es and kibana failed %s", err)
-			return nil, err
+			return err
 		}
 	}
+	err := createOrUpdateClusterConfigMap(c.clusterLoggingClient, c.corev1, "")
+	if err != nil {
+		logrus.Errorf("create or update cluster logging configmap error %s", err)
+		return err
+	}
 
-	return obj, createOrUpdateClusterConfigMap(c.clusterLoggingClient, c.corev1, "")
+	allDisabled, err := isAllLoggingDisable(c.clusterLoggingClient, c.projectLoggingClient)
+	if err != nil {
+		logrus.Errorf("get is all logging disable failed %v", err)
+		return err
+	}
+
+	if allDisabled {
+		logrus.Info("all logging disable")
+		removeFluentd(c.corev1, c.rbacv1beta1, c.appv1beta2)
+	} else {
+		err = createFluentd(c.corev1, c.rbacv1beta1, c.appv1beta2)
+		if err != nil {
+			logrus.Errorf("create fluentd failed %v", err)
+			return err
+		}
+	}
+	return nil
 }
 
 func generateClusterConfigFile(clusterLoggingClient v3.ClusterLoggingInterface, exclude string) error {
@@ -118,7 +108,7 @@ func createOrUpdateClusterConfigMap(clusterLoggingClient v3.ClusterLoggingInterf
 	return updateConfigMap(clusterConfigPath, loggingconfig.ClusterLoggingName, "cluster", corev1)
 }
 
-func (c *ClusterLoggingLifecycle) createEmbeddedTarget(namespace string) error {
+func (c *ClusterLoggingSyncer) createEmbeddedTarget(namespace string) error {
 	// create es deployment
 	existESDep, err := c.appv1beta2.Deployments(namespace).List(metav1.ListOptions{FieldSelector: fields.OneTermEqualSelector("metadata.name", k8sutils.EmbeddedESName).String()})
 	if err != nil {
@@ -256,8 +246,7 @@ func (c *ClusterLoggingLifecycle) createEmbeddedTarget(namespace string) error {
 	return nil
 }
 
-
-func (c *ClusterLoggingLifecycle) deleteEmbeddedTarget(namespace string) error {
+func (c *ClusterLoggingSyncer) deleteEmbeddedTarget(namespace string) error {
 	//service account
 	err := c.corev1.ServiceAccounts(namespace).Delete(k8sutils.EmbeddedESName, &metav1.DeleteOptions{})
 	if err != nil && !apierrors.IsNotFound(err) {

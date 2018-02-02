@@ -18,7 +18,7 @@ import (
 	"github.com/rancher/rancher/pkg/logging/generator"
 )
 
-type ProjectLoggingLifecycle struct {
+type ProjectLoggingSyncer struct {
 	clusterName          string
 	management           config.ManagementContext
 	appv1beta2           appsv1beta2.AppsV1beta2Interface
@@ -30,7 +30,7 @@ type ProjectLoggingLifecycle struct {
 
 func RegisterProjectLogging(cluster *config.ClusterContext) {
 	projectLoggingClient := cluster.Management.Management.ProjectLoggings("")
-	lifecycle := &ProjectLoggingLifecycle{
+	syncer := &ProjectLoggingSyncer{
 		clusterName:          cluster.ClusterName,
 		rbacv1beta1:          cluster.K8sClient.RbacV1beta1(),
 		management:           *cluster.Management,
@@ -40,29 +40,33 @@ func RegisterProjectLogging(cluster *config.ClusterContext) {
 		clusterLoggingClient: cluster.Management.Management.ClusterLoggings(""),
 	}
 
-	projectLoggingClient.AddClusterScopedLifecycle("project-logging-controller", cluster.ClusterName, lifecycle)
+	projectLoggingClient.AddHandler("project-logging-controller", syncer.Sync)
 }
 
-func (c *ProjectLoggingLifecycle) Create(obj *v3.ProjectLogging) (*v3.ProjectLogging, error) {
+func (c *ProjectLoggingSyncer) Sync(key string, obj *v3.ProjectLogging) error {
+	logrus.Info("-----------inside project logging sync")
 	err := createOrUpdateProjectConfigMap(c.projectLoggingClient, c.corev1, "")
 	if err != nil {
-		return nil, err
+		logrus.Errorf("create or update project logging configmap error %s", err)
+		return err
 	}
-
-	return obj, createFluentd(c.corev1, c.rbacv1beta1, c.appv1beta2)
-}
-
-func (c *ProjectLoggingLifecycle) Remove(obj *v3.ProjectLogging) (*v3.ProjectLogging, error) {
-	err := createOrUpdateProjectConfigMap(c.projectLoggingClient, c.corev1, obj.Name)
+	allDisabled, err := isAllLoggingDisable(c.clusterLoggingClient, c.projectLoggingClient)
 	if err != nil {
-		logrus.Errorf("before remove project logging update configmap error %s", err)
-		return nil, err
+		logrus.Errorf("get is all logging disable failed %v", err)
+		return err
 	}
-	return obj, removeAllLogging(c.corev1, c.rbacv1beta1, c.appv1beta2, c.clusterLoggingClient, c.projectLoggingClient, "", obj.Name)
-}
 
-func (c *ProjectLoggingLifecycle) Updated(obj *v3.ProjectLogging) (*v3.ProjectLogging, error) {
-	return obj, createOrUpdateProjectConfigMap(c.projectLoggingClient, c.corev1, "")
+	if allDisabled {
+		logrus.Info("all logging disable")
+		removeFluentd(c.corev1, c.rbacv1beta1, c.appv1beta2)
+	} else {
+		err = createFluentd(c.corev1, c.rbacv1beta1, c.appv1beta2)
+		if err != nil {
+			logrus.Errorf("create fluentd failed %v", err)
+			return err
+		}
+	}
+	return nil
 }
 
 func createOrUpdateProjectConfigMap(projectLoggingClient v3.ProjectLoggingInterface, corev1 typedv1.CoreV1Interface, exclude string) error {
