@@ -137,10 +137,12 @@ func (d *ConfigSyncer) addProjectAlert2Config(config *alertconfig.Config, alerts
 		id := alert.Namespace + "-" + alert.Name
 
 		receiver := &alertconfig.Receiver{Name: id}
-		config.Receivers = append(config.Receivers, receiver)
-		d.addRecipients(notifiers, receiver, alert.Spec.Recipients)
+		exist := d.addRecipients(notifiers, receiver, alert.Spec.Recipients)
+		if exist {
+			config.Receivers = append(config.Receivers, receiver)
+			d.addRoute(config, id, alert.Spec.InitialWaitSeconds, alert.Spec.RepeatIntervalSeconds)
 
-		d.addRoute(config, id, alert.Spec.InitialWaitSeconds, alert.Spec.RepeatIntervalSeconds)
+		}
 	}
 }
 
@@ -153,10 +155,12 @@ func (d *ConfigSyncer) addClusterAlert2Config(config *alertconfig.Config, alerts
 		id := alert.Namespace + "-" + alert.Name
 
 		receiver := &alertconfig.Receiver{Name: id}
-		config.Receivers = append(config.Receivers, receiver)
-		d.addRecipients(notifiers, receiver, alert.Spec.Recipients)
+		exist := d.addRecipients(notifiers, receiver, alert.Spec.Recipients)
+		if exist {
+			config.Receivers = append(config.Receivers, receiver)
+			d.addRoute(config, id, alert.Spec.InitialWaitSeconds, alert.Spec.RepeatIntervalSeconds)
+		}
 
-		d.addRoute(config, id, alert.Spec.InitialWaitSeconds, alert.Spec.RepeatIntervalSeconds)
 	}
 }
 
@@ -182,7 +186,8 @@ func (d *ConfigSyncer) addRoute(config *alertconfig.Config, id string, initalWai
 	config.Route.Routes = routes
 }
 
-func (d *ConfigSyncer) addRecipients(notifiers []*v3.Notifier, receiver *alertconfig.Receiver, recipients []v3.Recipient) {
+func (d *ConfigSyncer) addRecipients(notifiers []*v3.Notifier, receiver *alertconfig.Receiver, recipients []v3.Recipient) bool {
+	receiverExist := false
 	for _, r := range recipients {
 		if r.NotifierId != "" {
 			notifier := d.getNotifier(r.NotifierId, notifiers)
@@ -190,6 +195,7 @@ func (d *ConfigSyncer) addRecipients(notifiers []*v3.Notifier, receiver *alertco
 				logrus.Infof("Can not find the notifier %s", r.NotifierId)
 				continue
 			}
+
 			if notifier.Spec.PagerdutyConfig != nil {
 				pagerduty := &alertconfig.PagerdutyConfig{
 					ServiceKey:  alertconfig.Secret(notifier.Spec.PagerdutyConfig.ServiceKey),
@@ -199,6 +205,7 @@ func (d *ConfigSyncer) addRecipients(notifiers []*v3.Notifier, receiver *alertco
 					pagerduty.ServiceKey = alertconfig.Secret(r.Recipient)
 				}
 				receiver.PagerdutyConfigs = append(receiver.PagerdutyConfigs, pagerduty)
+				receiverExist = true
 
 			} else if notifier.Spec.WebhookConfig != nil {
 				webhook := &alertconfig.WebhookConfig{
@@ -208,6 +215,7 @@ func (d *ConfigSyncer) addRecipients(notifiers []*v3.Notifier, receiver *alertco
 					webhook.URL = r.Recipient
 				}
 				receiver.WebhookConfigs = append(receiver.WebhookConfigs, webhook)
+				receiverExist = true
 			} else if notifier.Spec.SlackConfig != nil {
 				slack := &alertconfig.SlackConfig{
 					APIURL:  alertconfig.Secret(notifier.Spec.SlackConfig.URL),
@@ -221,6 +229,7 @@ func (d *ConfigSyncer) addRecipients(notifiers []*v3.Notifier, receiver *alertco
 					slack.Channel = r.Recipient
 				}
 				receiver.SlackConfigs = append(receiver.SlackConfigs, slack)
+				receiverExist = true
 
 			} else if notifier.Spec.SmtpConfig != nil {
 				header := map[string]string{}
@@ -237,9 +246,12 @@ func (d *ConfigSyncer) addRecipients(notifiers []*v3.Notifier, receiver *alertco
 					email.To = r.Recipient
 				}
 				receiver.EmailConfigs = append(receiver.EmailConfigs, email)
+				receiverExist = true
 			}
 
 		}
 	}
+
+	return receiverExist
 
 }

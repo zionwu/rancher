@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/rancher/rancher/pkg/alert/manager"
 	"github.com/rancher/types/apis/core/v1"
 	"github.com/rancher/types/apis/management.cattle.io/v3"
 	"github.com/rancher/types/config"
+	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
@@ -21,7 +21,7 @@ type NodeWatcher struct {
 	clusterName        string
 }
 
-func NewNodeWatcher(cluster *config.ClusterContext, manager *manager.Manager) *NodeWatcher {
+func NewWatcher(cluster *config.ClusterContext, manager *manager.Manager) *NodeWatcher {
 
 	return &NodeWatcher{
 		nodeLister:         cluster.Core.Nodes("").Controller().Lister(),
@@ -57,15 +57,15 @@ func (w *NodeWatcher) Watch(stopc <-chan struct{}) {
 					} else if alert.Spec.TargetNode.Selector != nil {
 						selector := labels.NewSelector()
 						for key, value := range alert.Spec.TargetNode.Selector {
-							r := labels.NewRequirement(key, selection.Equals, []string{value})
-							selector.Add(r)
+							r, _ := labels.NewRequirement(key, selection.Equals, []string{value})
+							selector.Add(*r)
 						}
 
 						nodes, err := w.nodeLister.List("", selector)
 						if err != nil {
 							continue
 						}
-						for _, nodes := range nodes {
+						for _, node := range nodes {
 							w.checkNodeReady(node, alert)
 						}
 					}
@@ -76,6 +76,7 @@ func (w *NodeWatcher) Watch(stopc <-chan struct{}) {
 }
 
 func (w *NodeWatcher) checkNodeReady(node *corev1.Node, alert *v3.ClusterAlert) {
+	alertId := alert.Namespace + "-" + alert.Name
 	for _, cond := range node.Status.Conditions {
 		if cond.Type == corev1.NodeReady {
 			if cond.Status == corev1.ConditionFalse {
