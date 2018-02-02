@@ -318,40 +318,16 @@ func InitData(corev1Client typedv1.CoreV1Interface) error {
 	return nil
 }
 
-func isAllLoggingDisable(clusterLoggingClient v3.ClusterLoggingInterface, projectLoggingClient v3.ProjectLoggingInterface, excludeClusterLogging, excludeProjectLogging string) (bool, error) {
+func isAllLoggingDisable(clusterLoggingClient v3.ClusterLoggingInterface, projectLoggingClient v3.ProjectLoggingInterface) (bool, error) {
 	clusterLogging, err := clusterLoggingClient.List(metav1.ListOptions{})
 	if err != nil {
 		return false, err
-	}
-	existClusterLogging := len(clusterLogging.Items)
-	for _, v := range clusterLogging.Items {
-		if v.Name == excludeClusterLogging {
-			existClusterLogging = existClusterLogging - 1
-		}
 	}
 
 	projectLogging, err := projectLoggingClient.List(metav1.ListOptions{})
 	if err != nil {
 		return false, err
 	}
-	existProjectLogging := len(projectLogging.Items)
-	for _, v := range projectLogging.Items {
-		if v.Name == excludeProjectLogging {
-			existProjectLogging = existProjectLogging - 1
-		}
-	}
-	return existClusterLogging == 0 && existProjectLogging == 0, nil
+	return len(clusterLogging.Items) == 0 && len(projectLogging.Items) == 0, nil
 
-}
-
-func removeAllLogging(corev1 typedv1.CoreV1Interface, rbacv1beta1 rbacv1beta1.RbacV1beta1Interface, appv1beta2 appsv1beta2.AppsV1beta2Interface, clusterLoggingClient v3.ClusterLoggingInterface, projectLoggingClient v3.ProjectLoggingInterface, excludeClusterLogging, excludeProjectLogging string) error {
-	allDisabled, err := isAllLoggingDisable(clusterLoggingClient, projectLoggingClient, excludeClusterLogging, excludeProjectLogging)
-	if err != nil {
-		return err
-	}
-
-	if allDisabled {
-		removeFluentd(corev1, rbacv1beta1, appv1beta2)
-	}
-	return nil
 }

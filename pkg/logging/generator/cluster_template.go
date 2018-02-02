@@ -37,6 +37,7 @@ var ClusterTemplate = `{{ if ne .clusterTarget.CurrentTarget "none" }}
     logstash_format true
     logstash_dateformat  {{.clusterTarget.WrapEmbedded.DateFormat}}
     type_name  "container_log"
+    reload_connections false
     {{end -}}
 
     {{ if eq .clusterTarget.CurrentTarget "elasticsearch"}}
@@ -48,6 +49,7 @@ var ClusterTemplate = `{{ if ne .clusterTarget.CurrentTarget "none" }}
     logstash_format true
     logstash_dateformat  {{.clusterTarget.WrapElasticsearch.DateFormat}}
     type_name  "container_log"
+    reload_connections false
     {{end -}}
 
     {{ if eq .clusterTarget.CurrentTarget "splunk"}}
