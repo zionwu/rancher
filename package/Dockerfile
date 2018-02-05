@@ -12,11 +12,13 @@ ENV ETCD_ARGS "--data-dir /var/lib/rancher/etcd"
 WORKDIR /var/lib/rancher
 
 ENV CATTLE_UI_VERSION 2.0.16
+COPY dist /dist
 RUN mkdir -p /usr/share/rancher/ui && \
     cd /usr/share/rancher/ui && \
-    curl -sL https://releases.rancher.com/ui/${CATTLE_UI_VERSION}.tar.gz | tar xvzf - --strip-components=1 && \
+    cp -r /dist/* /usr/share/rancher/ui && \
     cd /var/lib/rancher && \
     ln -s /usr/share/rancher/ui ui
+
 
 ARG VERSION=dev
 ENV CATTLE_SERVER_VERSION ${VERSION}
