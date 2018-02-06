@@ -76,9 +76,10 @@ type TargetNode struct {
 }
 
 type TargetPod struct {
-	ID           string `json:"id,omitempty" norman:"required"`
-	Condition    string `json:"condition,omitempty" norman:"required,options=notrunning|notscheduled|restarts,default=notrunning"`
-	RestartTimes int    `json:"restartTimes,omitempty" norman:"min=1"`
+	ID                     string `json:"id,omitempty" norman:"required"`
+	Condition              string `json:"condition,omitempty" norman:"required,options=notrunning|notscheduled|restarts,default=notrunning"`
+	RestartTimes           int    `json:"restartTimes,omitempty" norman:"min=1,default=3"`
+	RestartIntervalSeconds int    `json:"restartIntervalSeconds,omitempty" norman:"min=1,default=300"`
 }
 
 type TargetWorkload struct {

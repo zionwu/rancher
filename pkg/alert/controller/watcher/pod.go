@@ -29,12 +29,11 @@ type restartTrack struct {
 	Time  time.Time
 }
 
-func StartPodWatcher(cluster *config.ClusterContext, manager *manager.Manager) {
+func NewPodWatcher(cluster *config.ClusterContext, manager *manager.Manager) *PodWatcher {
 	client := cluster.Management.Management.ProjectAlerts("")
-	podClient := cluster.Core.Pods("")
 
 	podWatcher := &PodWatcher{
-		podLister:          podClient.Controller().Lister(),
+		podLister:          cluster.Core.Pods("").Controller().Lister(),
 		projectAlertLister: client.Controller().Lister(),
 		alertManager:       manager,
 		clusterName:        cluster.ClusterName,
@@ -46,8 +45,7 @@ func StartPodWatcher(cluster *config.ClusterContext, manager *manager.Manager) {
 	}
 	client.AddClusterScopedLifecycle("project-alert-podtarget", cluster.ClusterName, projectAlertLifecycle)
 
-	podClient.AddHandler("pod-alert-watcher", podWatcher.Watch)
-
+	return podWatcher
 }
 
 type ProjectAlertLifecycle struct {
@@ -68,49 +66,52 @@ func (l *ProjectAlertLifecycle) Remove(obj *v3.ProjectAlert) (*v3.ProjectAlert, 
 	return obj, nil
 }
 
-func (w *PodWatcher) Watch(key string, pod *corev1.Pod) error {
-	logrus.Infof("pod key %s", key)
-	projectAlerts, err := w.projectAlertLister.List("", labels.NewSelector())
-	if err != nil {
-		logrus.Infof("Failed to get project alerts: %v", err)
-		return nil
-	}
+func (w *PodWatcher) Watch(stopc <-chan struct{}) {
+	tickChan := time.NewTicker(time.Second * 30).C
+	for {
+		select {
+		case <-stopc:
+			return
+		case <-tickChan:
+			projectAlerts, err := w.projectAlertLister.List("", labels.NewSelector())
+			if err != nil {
+				logrus.Infof("Failed to get project alerts: %v", err)
+				continue
+			}
 
-	pAlerts := []*v3.ProjectAlert{}
-	for _, alert := range projectAlerts {
-		if controller.ObjectInCluster(w.clusterName, alert) {
-			pAlerts = append(pAlerts, alert)
-		}
-	}
-
-	newPod, err := w.podLister.Get(pod.Namespace, pod.Name)
-	if err != nil {
-		//TODO: what to do when pod not found
-		logrus.Infof("Failed to get pod %s: %v", key, err)
-		return err
-	}
-
-	for _, alert := range pAlerts {
-
-		if alert.Spec.TargetPod.ID != "" {
-			parts := strings.Split(alert.Spec.TargetPod.ID, ":")
-			ns := parts[0]
-			podId := parts[1]
-			if podId == pod.Name && ns == pod.Namespace {
-				switch alert.Spec.TargetPod.Condition {
-				case "notrunning":
-					w.checkPodRunning(newPod, alert)
-				case "notscheduled":
-					w.checkPodScheduled(newPod, alert)
-				//TODO: re-test
-				case "restarts":
-					w.checkPodRestarts(newPod, alert)
+			pAlerts := []*v3.ProjectAlert{}
+			for _, alert := range projectAlerts {
+				if controller.ObjectInCluster(w.clusterName, alert) {
+					pAlerts = append(pAlerts, alert)
 				}
 			}
+
+			for _, alert := range pAlerts {
+
+				if alert.Spec.TargetPod.ID != "" {
+					parts := strings.Split(alert.Spec.TargetPod.ID, ":")
+					ns := parts[0]
+					podId := parts[1]
+					newPod, err := w.podLister.Get(ns, podId)
+					if err != nil {
+						//TODO: what to do when pod not found
+						logrus.Infof("Failed to get pod %s: %v", podId, err)
+						continue
+					}
+
+					switch alert.Spec.TargetPod.Condition {
+					case "notrunning":
+						w.checkPodRunning(newPod, alert)
+					case "notscheduled":
+						w.checkPodScheduled(newPod, alert)
+					case "restarts":
+						w.checkPodRestarts(newPod, alert)
+					}
+				}
+			}
+
 		}
 	}
-
-	return nil
 }
 
 func (w *PodWatcher) checkPodRestarts(pod *corev1.Pod, alert *v3.ProjectAlert) {
@@ -146,12 +147,14 @@ func (w *PodWatcher) getRestartTimeFromTrack(alert *v3.ProjectAlert, curCount in
 
 	if len(tracks) == 0 {
 		tracks = append(tracks, restartTrack{Count: curCount, Time: now})
+		w.podRestartTrack[alert.Namespace+":"+alert.Name] = tracks
 		return curCount
 	}
 
 	for i, track := range tracks {
-		if now.Sub(track.Time).Seconds() < 600 {
+		if now.Sub(track.Time).Seconds() < float64(alert.Spec.TargetPod.RestartIntervalSeconds) {
 			tracks = tracks[i:]
+			tracks = append(tracks, restartTrack{Count: curCount, Time: now})
 			w.podRestartTrack[alert.Namespace+":"+alert.Name] = tracks
 			return track.Count
 		}

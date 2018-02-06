@@ -46,11 +46,20 @@ func Register(ctx context.Context, cluster *config.ClusterContext) {
 	sysWatcher := watcher.NewSysComponentWatcher(cluster, alertmanager)
 	go sysWatcher.Watch(ctx.Done())
 
-	watcher.StartNodeWatcher(cluster, alertmanager)
-	watcher.StartPodWatcher(cluster, alertmanager)
-	watcher.StartDeploymentWatcher(cluster, alertmanager)
-	watcher.StartDaemonsetWatcher(cluster, alertmanager)
-	watcher.StartStatefulsetWatcher(cluster, alertmanager)
+	podWatcher := watcher.NewPodWatcher(cluster, alertmanager)
+	go podWatcher.Watch(ctx.Done())
+
+	nodeWatcher := watcher.NewNodeWatcher(cluster, alertmanager)
+	go nodeWatcher.Watch(ctx.Done())
+
+	ssWatcher := watcher.NewStatefulsetWatcher(cluster, alertmanager)
+	go ssWatcher.Watch(ctx.Done())
+
+	depWatcher := watcher.NewDeploymentWatcher(cluster, alertmanager)
+	go depWatcher.Watch(ctx.Done())
+
+	dsWatcher := watcher.NewDaemonsetWatcher(cluster, alertmanager)
+	go dsWatcher.Watch(ctx.Done())
 
 	initClusterPreCanAlerts(clusterAlertClient, cluster.ClusterName)
 

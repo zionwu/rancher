@@ -2,7 +2,9 @@ package watcher
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/rancher/norman/controller"
 	"github.com/rancher/rancher/pkg/alert/manager"
@@ -23,67 +25,72 @@ type DeploymentWatcher struct {
 	clusterName        string
 }
 
-func StartDeploymentWatcher(cluster *config.ClusterContext, manager *manager.Manager) {
+func NewDeploymentWatcher(cluster *config.ClusterContext, manager *manager.Manager) *DeploymentWatcher {
 
-	dClient := cluster.Apps.Deployments("")
-	watcher := &DeploymentWatcher{
-		deploymentLister:   dClient.Controller().Lister(),
+	return &DeploymentWatcher{
+		deploymentLister:   cluster.Apps.Deployments("").Controller().Lister(),
 		projectAlertLister: cluster.Management.Management.ProjectAlerts("").Controller().Lister(),
 		alertManager:       manager,
 		clusterName:        cluster.ClusterName,
 	}
-	dClient.AddHandler("deployment-alert-watcher", watcher.Watch)
 
 }
 
-func (w *DeploymentWatcher) Watch(key string, deployment *appsv1beta2.Deployment) error {
-	logrus.Infof("deployment key %s", key)
-	projectAlerts, err := w.projectAlertLister.List("", labels.NewSelector())
-	if err != nil {
-		logrus.Infof("Failed to get project alerts: %v", err)
-		return nil
-	}
+func (w *DeploymentWatcher) Watch(stopc <-chan struct{}) {
+	tickChan := time.NewTicker(time.Second * 30).C
+	for {
+		select {
+		case <-stopc:
+			return
+		case <-tickChan:
+			projectAlerts, err := w.projectAlertLister.List("", labels.NewSelector())
+			if err != nil {
+				logrus.Infof("Failed to get project alerts: %v", err)
+				continue
+			}
 
-	pAlerts := []*v3.ProjectAlert{}
-	for _, alert := range projectAlerts {
-		if controller.ObjectInCluster(w.clusterName, alert) {
-			pAlerts = append(pAlerts, alert)
-		}
-	}
-
-	dep, err := w.deploymentLister.Get(deployment.Namespace, deployment.Name)
-	if err != nil {
-		return err
-	}
-
-	for _, alert := range pAlerts {
-		if alert.Spec.TargetWorkload.Type == "deployment" {
-
-			if alert.Spec.TargetWorkload.ID != "" {
-				parts := strings.Split(alert.Spec.TargetWorkload.ID, ":")
-				ns := parts[0]
-				id := parts[1]
-				if id == dep.Name && ns == dep.Namespace {
-					w.checkUnavailble(dep, alert)
-				}
-
-			} else if alert.Spec.TargetWorkload.Selector != nil {
-				//TODO: should check if the deployment in the same project as the alert
-				nodeLabel := labels.Set(dep.GetLabels())
-
-				selector := labels.NewSelector()
-				for key, value := range alert.Spec.TargetWorkload.Selector {
-					r, _ := labels.NewRequirement(key, selection.Equals, []string{value})
-					selector.Add(*r)
-				}
-				if selector.Matches(nodeLabel) {
-					w.checkUnavailble(dep, alert)
+			pAlerts := []*v3.ProjectAlert{}
+			for _, alert := range projectAlerts {
+				if controller.ObjectInCluster(w.clusterName, alert) {
+					pAlerts = append(pAlerts, alert)
 				}
 			}
+
+			for _, alert := range pAlerts {
+				if alert.Spec.TargetWorkload.Type == "deployment" {
+
+					if alert.Spec.TargetWorkload.ID != "" {
+						parts := strings.Split(alert.Spec.TargetWorkload.ID, ":")
+						ns := parts[0]
+						id := parts[1]
+						dep, err := w.deploymentLister.Get(ns, id)
+						if err != nil {
+							continue
+						}
+						w.checkUnavailble(dep, alert)
+
+					} else if alert.Spec.TargetWorkload.Selector != nil {
+						//TODO: should check if the deployment in the same project as the alert
+
+						selector := labels.NewSelector()
+						for key, value := range alert.Spec.TargetWorkload.Selector {
+							r, _ := labels.NewRequirement(key, selection.Equals, []string{value})
+							selector.Add(*r)
+						}
+						deps, err := w.deploymentLister.List("", selector)
+						if err != nil {
+							logrus.Errorf("Failed to find deployments: %v", err)
+							continue
+						}
+						for _, dep := range deps {
+							w.checkUnavailble(dep, alert)
+						}
+					}
+				}
+			}
+
 		}
 	}
-
-	return nil
 }
 
 func (w *DeploymentWatcher) checkUnavailble(deployment *appsv1beta2.Deployment, alert *v3.ProjectAlert) {
@@ -97,9 +104,9 @@ func (w *DeploymentWatcher) checkUnavailble(deployment *appsv1beta2.Deployment, 
 	availableThreshold := (100 - int32(percentage)) * (*deployment.Spec.Replicas) / 100
 
 	if deployment.Status.AvailableReplicas <= availableThreshold {
-		title := fmt.Sprintf("The deployment %s has unavailable replicas over %s", deployment.Name, percentage)
-		desc := fmt.Sprintf("*Alert Name*: %s\n*Cluster Name*: %s\n*Available Replicas*: %s\n*Desired Replicas*: %s", alert.Spec.DisplayName, w.clusterName, deployment.Status.AvailableReplicas,
-			deployment.Spec.Replicas)
+		title := fmt.Sprintf("The deployment %s has unavailable replicas over %s%%", deployment.Name, strconv.Itoa(percentage))
+		desc := fmt.Sprintf("*Alert Name*: %s\n*Cluster Name*: %s\n*Available Replicas*: %s\n*Desired Replicas*: %s", alert.Spec.DisplayName, w.clusterName, strconv.Itoa(int(deployment.Status.AvailableReplicas)),
+			strconv.Itoa(int(*deployment.Spec.Replicas)))
 
 		if err := w.alertManager.SendAlert(alertId, desc, title, alert.Spec.Severity); err != nil {
 			logrus.Errorf("Failed to send alert: %v", err)

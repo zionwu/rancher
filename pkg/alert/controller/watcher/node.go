@@ -3,6 +3,7 @@ package watcher
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/rancher/rancher/pkg/alert/manager"
 	"github.com/rancher/types/apis/core/v1"
@@ -21,57 +22,59 @@ type NodeWatcher struct {
 	clusterName        string
 }
 
-func StartNodeWatcher(cluster *config.ClusterContext, manager *manager.Manager) {
+func NewNodeWatcher(cluster *config.ClusterContext, manager *manager.Manager) *NodeWatcher {
 
-	nodeClient := cluster.Core.Nodes("")
-	watcher := &NodeWatcher{
-		nodeLister:         nodeClient.Controller().Lister(),
+	return &NodeWatcher{
+		nodeLister:         cluster.Core.Nodes("").Controller().Lister(),
 		clusterAlertLister: cluster.Management.Management.ClusterAlerts(cluster.ClusterName).Controller().Lister(),
 		alertManager:       manager,
 		clusterName:        cluster.ClusterName,
 	}
-	nodeClient.AddHandler("node-alert-watcher", watcher.Watch)
 }
 
-func (w *NodeWatcher) Watch(key string, node *corev1.Node) error {
-	logrus.Infof("node key %s", key)
+func (w *NodeWatcher) Watch(stopc <-chan struct{}) {
+	tickChan := time.NewTicker(time.Second * 30).C
+	for {
+		select {
+		case <-stopc:
+			return
+		case <-tickChan:
+			clusterAlerts, err := w.clusterAlertLister.List("", labels.NewSelector())
+			if err != nil {
+				logrus.Infof("Failed to get cluster alerts: %v", err)
+				continue
+			}
 
-	clusterAlerts, err := w.clusterAlertLister.List("", labels.NewSelector())
-	if err != nil {
-		logrus.Infof("Failed to get cluster alerts: %v", err)
-		return nil
-	}
+			for _, alert := range clusterAlerts {
+				if alert.Spec.TargetNode.Condition != "notready" {
+					if alert.Spec.TargetNode.ID != "" {
+						parts := strings.Split(alert.Spec.TargetNode.ID, ":")
+						id := parts[1]
+						newNode, err := w.nodeLister.Get("", id)
+						if err != nil {
+							continue
+						}
+						w.checkNodeReady(newNode, alert)
 
-	newNode, err := w.nodeLister.Get("", node.Name)
-	if err != nil {
-		return err
-	}
+					} else if alert.Spec.TargetNode.Selector != nil {
 
-	for _, alert := range clusterAlerts {
-		if alert.Spec.TargetNode.Condition != "notready" {
-			if alert.Spec.TargetNode.ID != "" {
-				parts := strings.Split(alert.Spec.TargetNode.ID, ":")
-				id := parts[1]
-				if id == newNode.Name {
-					w.checkNodeReady(newNode, alert)
-				}
-
-			} else if alert.Spec.TargetNode.Selector != nil {
-				nodeLabel := labels.Set(newNode.GetLabels())
-
-				selector := labels.NewSelector()
-				for key, value := range alert.Spec.TargetNode.Selector {
-					r, _ := labels.NewRequirement(key, selection.Equals, []string{value})
-					selector.Add(*r)
-				}
-				if selector.Matches(nodeLabel) {
-					w.checkNodeReady(newNode, alert)
+						selector := labels.NewSelector()
+						for key, value := range alert.Spec.TargetNode.Selector {
+							r, _ := labels.NewRequirement(key, selection.Equals, []string{value})
+							selector.Add(*r)
+						}
+						nodes, err := w.nodeLister.List("", selector)
+						if err != nil {
+							continue
+						}
+						for _, node := range nodes {
+							w.checkNodeReady(node, alert)
+						}
+					}
 				}
 			}
 		}
 	}
-
-	return nil
 }
 
 func (w *NodeWatcher) checkNodeReady(node *corev1.Node, alert *v3.ClusterAlert) {
