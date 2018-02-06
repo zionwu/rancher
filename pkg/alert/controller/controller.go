@@ -5,10 +5,9 @@ import (
 
 	"github.com/rancher/rancher/pkg/alert/controller/configsyncer"
 	"github.com/rancher/rancher/pkg/alert/controller/deploy"
-	"github.com/rancher/rancher/pkg/alert/controller/nodewatcher"
-	"github.com/rancher/rancher/pkg/alert/controller/podwatcher"
 	"github.com/rancher/rancher/pkg/alert/controller/statesyncer"
 	"github.com/rancher/rancher/pkg/alert/controller/syscomponentwatcher"
+	"github.com/rancher/rancher/pkg/alert/controller/watcher"
 	"github.com/rancher/rancher/pkg/alert/manager"
 	"github.com/rancher/types/apis/management.cattle.io/v3"
 	"github.com/rancher/types/config"
@@ -45,14 +44,14 @@ func Register(ctx context.Context, cluster *config.ClusterContext) {
 	stateSyncer := statesyncer.NewStateSyncer(cluster, alertmanager)
 	go stateSyncer.Run(ctx.Done())
 
-	podWatcher := podwatcher.NewWatcher(cluster, alertmanager)
-	go podWatcher.Watch(ctx.Done())
-
-	nodeWatcher := nodewatcher.NewWatcher(cluster, alertmanager)
-	go nodeWatcher.Watch(ctx.Done())
-
 	sysWatcher := syscomponentwatcher.NewSysComponentWatcher(cluster, alertmanager)
 	go sysWatcher.Watch(ctx.Done())
+
+	watcher.StartNodeWatcher(cluster, alertmanager)
+	watcher.StartPodWatcher(cluster, alertmanager)
+	watcher.StartDeploymentWatcher(cluster, alertmanager)
+	watcher.StartDaemonsetWatcher(cluster, alertmanager)
+	watcher.StartStatefulsetWatcher(cluster, alertmanager)
 
 	initClusterPreCanAlerts(clusterAlertClient, cluster.ClusterName)
 

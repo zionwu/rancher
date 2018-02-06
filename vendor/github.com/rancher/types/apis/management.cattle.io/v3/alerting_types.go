@@ -83,8 +83,9 @@ type TargetPod struct {
 
 type TargetWorkload struct {
 	ID                    string            `json:"id,omitempty"`
+	Type                  string            `json:"type,omitempty" norman:"required,options=deployment|statefulset|daemonset,default=deployment"`
 	Selector              map[string]string `json:"selector,omitempty"`
-	UnavailablePercentage int               `json:"unavailablePercentage,omitempty" norman:"required,min=1,max=100"`
+	UnavailablePercentage int               `json:"unavailablePercentage,omitempty" norman:"required,min=1,max=100,default=30"`
 }
 
 type TargetSystemService struct {
@@ -137,6 +138,14 @@ type NotifierSpec struct {
 
 	DisplayName     string           `json:"displayName,omitempty" norman:"required"`
 	Description     string           `json:"description,omitempty"`
+	SmtpConfig      *SmtpConfig      `json:"smtpConfig,omitempty"`
+	SlackConfig     *SlackConfig     `json:"slackConfig,omitempty"`
+	PagerdutyConfig *PagerdutyConfig `json:"pagerdutyConfig,omitempty"`
+	WebhookConfig   *WebhookConfig   `json:"webhookConfig,omitempty"`
+}
+
+type Notification struct {
+	Message         string           `json:"message, omitempty"`
 	SmtpConfig      *SmtpConfig      `json:"smtpConfig,omitempty"`
 	SlackConfig     *SlackConfig     `json:"slackConfig,omitempty"`
 	PagerdutyConfig *PagerdutyConfig `json:"pagerdutyConfig,omitempty"`

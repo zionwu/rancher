@@ -235,10 +235,12 @@ func alertTypes(schema *types.Schemas) *types.Schemas {
 		AddMapperForType(&Version, &v3.ProjectAlert{},
 			&m.Embed{Field: "status"},
 			m.DisplayName{}).
+		MustImport(&Version, v3.Notification{}).
 		MustImportAndCustomize(&Version, v3.Notifier{}, func(schema *types.Schema) {
 			schema.CollectionActions = map[string]types.Action{
-				//Add a message body as input
-				"send": {},
+				"send": {
+					Input: "notification",
+				},
 			}
 		}).
 		MustImportAndCustomize(&Version, v3.ClusterAlert{}, func(schema *types.Schema) {

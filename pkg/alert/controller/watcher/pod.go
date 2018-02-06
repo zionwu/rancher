@@ -1,4 +1,4 @@
-package podwatcher
+package watcher
 
 import (
 	"fmt"
@@ -21,18 +21,24 @@ type PodWatcher struct {
 	alertManager       *manager.Manager
 	projectAlertLister v3.ProjectAlertLister
 	clusterName        string
-	podRestartTrack    map[string][]int32
+	podRestartTrack    map[string][]restartTrack
 }
 
-func NewWatcher(cluster *config.ClusterContext, manager *manager.Manager) *PodWatcher {
+type restartTrack struct {
+	Count int32
+	Time  time.Time
+}
+
+func StartPodWatcher(cluster *config.ClusterContext, manager *manager.Manager) {
 	client := cluster.Management.Management.ProjectAlerts("")
+	podClient := cluster.Core.Pods("")
 
 	podWatcher := &PodWatcher{
-		podLister:          cluster.Core.Pods("").Controller().Lister(),
+		podLister:          podClient.Controller().Lister(),
 		projectAlertLister: client.Controller().Lister(),
 		alertManager:       manager,
 		clusterName:        cluster.ClusterName,
-		podRestartTrack:    map[string][]int32{},
+		podRestartTrack:    map[string][]restartTrack{},
 	}
 
 	projectAlertLifecycle := &ProjectAlertLifecycle{
@@ -40,7 +46,8 @@ func NewWatcher(cluster *config.ClusterContext, manager *manager.Manager) *PodWa
 	}
 	client.AddClusterScopedLifecycle("project-alert-podtarget", cluster.ClusterName, projectAlertLifecycle)
 
-	return podWatcher
+	podClient.AddHandler("pod-alert-watcher", podWatcher.Watch)
+
 }
 
 type ProjectAlertLifecycle struct {
@@ -48,8 +55,7 @@ type ProjectAlertLifecycle struct {
 }
 
 func (l *ProjectAlertLifecycle) Create(obj *v3.ProjectAlert) (*v3.ProjectAlert, error) {
-	l.podWatcher.podRestartTrack[obj.Namespace+":"+obj.Name] = make([]int32, 0)
-
+	l.podWatcher.podRestartTrack[obj.Namespace+":"+obj.Name] = make([]restartTrack, 0)
 	return obj, nil
 }
 
@@ -62,51 +68,49 @@ func (l *ProjectAlertLifecycle) Remove(obj *v3.ProjectAlert) (*v3.ProjectAlert, 
 	return obj, nil
 }
 
-func (w *PodWatcher) Watch(stopc <-chan struct{}) {
-	tickChan := time.NewTicker(time.Second * 10).C
-	for {
-		select {
-		case <-stopc:
-			return
-		case <-tickChan:
-			projectAlerts, err := w.projectAlertLister.List("", labels.NewSelector())
-			if err != nil {
-				logrus.Infof("Failed to get project alerts: %v", err)
-				continue
-			}
+func (w *PodWatcher) Watch(key string, pod *corev1.Pod) error {
+	logrus.Infof("pod key %s", key)
+	projectAlerts, err := w.projectAlertLister.List("", labels.NewSelector())
+	if err != nil {
+		logrus.Infof("Failed to get project alerts: %v", err)
+		return nil
+	}
 
-			pAlerts := []*v3.ProjectAlert{}
-			for _, alert := range projectAlerts {
-				if controller.ObjectInCluster(w.clusterName, alert) {
-					pAlerts = append(pAlerts, alert)
-				}
-			}
+	pAlerts := []*v3.ProjectAlert{}
+	for _, alert := range projectAlerts {
+		if controller.ObjectInCluster(w.clusterName, alert) {
+			pAlerts = append(pAlerts, alert)
+		}
+	}
 
-			for _, alert := range pAlerts {
+	newPod, err := w.podLister.Get(pod.Namespace, pod.Name)
+	if err != nil {
+		//TODO: what to do when pod not found
+		//logrus.Infof("Failed to get pod %s: %v", alert.Spec.TargetPod.ID, err)
+		return err
+	}
 
-				if alert.Spec.TargetPod.ID != "" {
-					parts := strings.Split(alert.Spec.TargetPod.ID, ":")
-					ns := parts[0]
-					podId := parts[1]
-					pod, err := w.podLister.Get(ns, podId)
-					if err != nil {
-						//logrus.Infof("Failed to get pod %s: %v", alert.Spec.TargetPod.ID, err)
-						continue
-					}
+	for _, alert := range pAlerts {
 
-					switch alert.Spec.TargetPod.Condition {
-					case "notrunning":
-						w.checkPodRunning(pod, alert)
-					case "notscheduled":
-						w.checkPodScheduled(pod, alert)
-					case "restarts":
-						w.checkPodRestarts(pod, alert)
-					}
+		if alert.Spec.TargetPod.ID != "" {
+			parts := strings.Split(alert.Spec.TargetPod.ID, ":")
+			ns := parts[0]
+			podId := parts[1]
+			if podId == pod.Name && ns == pod.Namespace {
+				switch alert.Spec.TargetPod.Condition {
+				case "notrunning":
+					w.checkPodRunning(newPod, alert)
+				case "notscheduled":
+					w.checkPodScheduled(newPod, alert)
+				//TODO: re-test
+				case "restarts":
+					w.checkPodRestarts(newPod, alert)
 				}
 			}
 		}
-
 	}
+
+	return nil
 }
 
 func (w *PodWatcher) checkPodRestarts(pod *corev1.Pod, alert *v3.ProjectAlert) {
@@ -114,14 +118,9 @@ func (w *PodWatcher) checkPodRestarts(pod *corev1.Pod, alert *v3.ProjectAlert) {
 	for _, containerStatus := range pod.Status.ContainerStatuses {
 		if containerStatus.State.Running == nil {
 			curCount := containerStatus.RestartCount
-			history := w.podRestartTrack[alert.Namespace+":"+alert.Name]
-			if len(history) == 0 {
-				history = append(history, curCount)
-				w.podRestartTrack[alert.Namespace+":"+alert.Name] = history
-				return
-			}
+			preCount := w.getRestartTimeFromTrack(alert, curCount)
 
-			if curCount-history[0] >= int32(alert.Spec.TargetPod.RestartTimes) {
+			if curCount-preCount >= int32(alert.Spec.TargetPod.RestartTimes) {
 				logrus.Info("hit")
 				alertId := alert.Namespace + "-" + alert.Name
 				details := ""
@@ -136,16 +135,31 @@ func (w *PodWatcher) checkPodRestarts(pod *corev1.Pod, alert *v3.ProjectAlert) {
 				}
 			}
 
-			if len(history) >= 30 {
-				history = history[1:]
-			}
-			history = append(history, curCount)
-			w.podRestartTrack[alert.Namespace+":"+alert.Name] = history
-
 			return
 		}
 	}
 
+}
+
+func (w *PodWatcher) getRestartTimeFromTrack(alert *v3.ProjectAlert, curCount int32) int32 {
+	tracks := w.podRestartTrack[alert.Namespace+":"+alert.Name]
+	now := time.Now()
+
+	if len(tracks) == 0 {
+		tracks = append(tracks, restartTrack{Count: curCount, Time: now})
+		return curCount
+	}
+
+	for i, track := range tracks {
+		if now.Sub(track.Time).Seconds() < 600 {
+			tracks = tracks[i:]
+			w.podRestartTrack[alert.Namespace+":"+alert.Name] = tracks
+			return track.Count
+		}
+	}
+
+	w.podRestartTrack[alert.Namespace+":"+alert.Name] = []restartTrack{}
+	return curCount
 }
 
 func (w *PodWatcher) checkPodRunning(pod *corev1.Pod, alert *v3.ProjectAlert) {

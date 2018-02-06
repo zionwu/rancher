@@ -37,7 +37,7 @@ func AlertFormatter(apiContext *types.APIContext, resource *types.RawResource) {
 }
 
 func (h *Handler) ClusterActionHandler(actionName string, action *types.Action, request *types.APIContext) error {
-	logrus.Infof("do activity action:%s", actionName)
+	//logrus.Infof("do activity action:%s", actionName)
 
 	alertClient := h.Management.Management.ClusterAlerts("")
 
