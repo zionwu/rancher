@@ -2,6 +2,7 @@ package alert
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -11,9 +12,9 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
-	"github.com/rancher/norman/types"
-
+	"github.com/prometheus/common/model"
 	"github.com/rancher/norman/parse"
+	"github.com/rancher/norman/types"
 )
 
 func NotifierCollectionFormatter(apiContext *types.APIContext, collection *types.GenericCollection) {
@@ -48,19 +49,112 @@ func testNotifier(actionName string, action *types.Action, apiContext *types.API
 		}
 	}
 
-	emailConfigInterface, exist := actionInput["smtpConfig"]
+	smtpConfigInterface, exist := actionInput["smtpConfig"]
 	if exist {
-		emailConfig, ok := emailConfigInterface.(map[string]interface{})
+		smtpConfig, ok := smtpConfigInterface.(map[string]interface{})
 		if ok {
-			host := emailConfig["host"].(string)
-			port := emailConfig["port"].(string)
-			password := emailConfig["password"].(string)
-			username := emailConfig["username"].(string)
-			if err := testEmail(host, port, password, username); err != nil {
+			host := smtpConfig["host"].(string)
+			port := smtpConfig["port"].(string)
+			password := smtpConfig["password"].(string)
+			username := smtpConfig["username"].(string)
+			tls := smtpConfig["tls"].(bool)
+			if err := testEmail(host, port, password, username, tls); err != nil {
 				return err
 			}
 			return nil
 		}
+	}
+
+	webhookConfigInterface, exist := actionInput["webhookConfig"]
+	if exist {
+		webhookConfig, ok := webhookConfigInterface.(map[string]interface{})
+		if ok {
+			url := webhookConfig["url"].(string)
+			if err := testWebhook(url); err != nil {
+				return err
+			}
+			return nil
+		}
+	}
+
+	pagerdutyConfigInterface, exist := actionInput["pagerdutyConfig"]
+	if exist {
+		pagerdutyConfig, ok := pagerdutyConfigInterface.(map[string]interface{})
+		if ok {
+			key := pagerdutyConfig["serviceKey"].(string)
+			if err := testPagerduty(key); err != nil {
+				return err
+			}
+			return nil
+		}
+	}
+
+	return nil
+}
+
+type pagerDutyMessage struct {
+	RoutingKey  string `json:"routing_key,omitempty"`
+	ServiceKey  string `json:"service_key,omitempty"`
+	DedupKey    string `json:"dedup_key,omitempty"`
+	IncidentKey string `json:"incident_key,omitempty"`
+	EventType   string `json:"event_type,omitempty"`
+	Description string `json:"description,omitempty"`
+}
+
+func hashKey(s string) string {
+	h := sha256.New()
+	h.Write([]byte(s))
+	return fmt.Sprintf("%x", h.Sum(nil))
+}
+
+func testPagerduty(key string) error {
+
+	msg := &pagerDutyMessage{
+		ServiceKey:  key,
+		EventType:   "trigger",
+		IncidentKey: hashKey("key"),
+		Description: "test pagerduty service key",
+	}
+
+	url := "https://events.pagerduty.com/generic/2010-04-15/create_event.json"
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(msg); err != nil {
+		return err
+	}
+	resp, err := http.Post(url, "application/json", &buf)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("http status code is not 200")
+	}
+
+	return nil
+}
+
+func testWebhook(url string) error {
+	alertList := model.Alerts{}
+	a := &model.Alert{}
+	a.Labels = map[model.LabelName]model.LabelValue{}
+	a.Labels[model.LabelName("test_msg")] = model.LabelValue("test webhook")
+
+	alertList = append(alertList, a)
+
+	alertData, err := json.Marshal(alertList)
+	if err != nil {
+		return err
+	}
+
+	resp, err := http.Post(url, "application/json", bytes.NewBuffer(alertData))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("http status code is not 200")
 	}
 
 	return nil
@@ -99,11 +193,11 @@ func testSlack(url string) error {
 
 	return nil
 }
-func testEmail(host, port, password, username string) error {
+func testEmail(host, port, password, username string, requireTLS bool) error {
 	var c *smtp.Client
 	smartHost := host + ":" + port
 
-	if port == "465" || port == "587" {
+	if requireTLS {
 		conn, err := tls.Dial("tcp", smartHost, &tls.Config{ServerName: host})
 		if err != nil {
 			return err

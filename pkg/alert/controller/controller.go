@@ -6,7 +6,6 @@ import (
 	"github.com/rancher/rancher/pkg/alert/controller/configsyncer"
 	"github.com/rancher/rancher/pkg/alert/controller/deploy"
 	"github.com/rancher/rancher/pkg/alert/controller/statesyncer"
-	"github.com/rancher/rancher/pkg/alert/controller/syscomponentwatcher"
 	"github.com/rancher/rancher/pkg/alert/controller/watcher"
 	"github.com/rancher/rancher/pkg/alert/manager"
 	"github.com/rancher/types/apis/management.cattle.io/v3"
@@ -44,7 +43,7 @@ func Register(ctx context.Context, cluster *config.ClusterContext) {
 	stateSyncer := statesyncer.NewStateSyncer(cluster, alertmanager)
 	go stateSyncer.Run(ctx.Done())
 
-	sysWatcher := syscomponentwatcher.NewSysComponentWatcher(cluster, alertmanager)
+	sysWatcher := watcher.NewSysComponentWatcher(cluster, alertmanager)
 	go sysWatcher.Watch(ctx.Done())
 
 	watcher.StartNodeWatcher(cluster, alertmanager)

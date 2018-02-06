@@ -2,6 +2,7 @@ package watcher
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/rancher/rancher/pkg/alert/manager"
 	"github.com/rancher/types/apis/core/v1"
@@ -48,9 +49,12 @@ func (w *NodeWatcher) Watch(key string, node *corev1.Node) error {
 
 	for _, alert := range clusterAlerts {
 		if alert.Spec.TargetNode.Condition != "notready" {
-			//TODO: check key format
-			if alert.Spec.TargetNode.ID != "" && alert.Spec.TargetNode.ID == node.Name {
-				w.checkNodeReady(newNode, alert)
+			if alert.Spec.TargetNode.ID != "" {
+				parts := strings.Split(alert.Spec.TargetNode.ID, ":")
+				id := parts[1]
+				if id == newNode.Name {
+					w.checkNodeReady(newNode, alert)
+				}
 
 			} else if alert.Spec.TargetNode.Selector != nil {
 				nodeLabel := labels.Set(newNode.GetLabels())
@@ -63,7 +67,6 @@ func (w *NodeWatcher) Watch(key string, node *corev1.Node) error {
 				if selector.Matches(nodeLabel) {
 					w.checkNodeReady(newNode, alert)
 				}
-
 			}
 		}
 	}

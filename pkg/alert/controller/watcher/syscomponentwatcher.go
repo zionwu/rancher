@@ -1,4 +1,4 @@
-package syscomponentwatcher
+package watcher
 
 import (
 	"fmt"
@@ -47,12 +47,12 @@ func (w *SysComponentWatcher) Watch(stopc <-chan struct{}) {
 			}
 
 			statuses, err := w.componentStatuses.List(metav1.ListOptions{})
+			if err != nil {
+				logrus.Errorf("Error occured while getting component statuses: %v", err)
+				continue
+			}
 			for _, alert := range clusterAlerts {
 				if alert.Spec.TargetSystemService.Condition != "" {
-					if err != nil {
-						logrus.Errorf("Error occured while getting project alerts: %v", err)
-						continue
-					}
 					w.checkComponentHealthy(statuses, alert)
 				}
 			}

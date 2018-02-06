@@ -86,7 +86,7 @@ func (w *PodWatcher) Watch(key string, pod *corev1.Pod) error {
 	newPod, err := w.podLister.Get(pod.Namespace, pod.Name)
 	if err != nil {
 		//TODO: what to do when pod not found
-		//logrus.Infof("Failed to get pod %s: %v", alert.Spec.TargetPod.ID, err)
+		logrus.Infof("Failed to get pod %s: %v", key, err)
 		return err
 	}
 
@@ -121,7 +121,6 @@ func (w *PodWatcher) checkPodRestarts(pod *corev1.Pod, alert *v3.ProjectAlert) {
 			preCount := w.getRestartTimeFromTrack(alert, curCount)
 
 			if curCount-preCount >= int32(alert.Spec.TargetPod.RestartTimes) {
-				logrus.Info("hit")
 				alertId := alert.Namespace + "-" + alert.Name
 				details := ""
 				if containerStatus.State.Waiting != nil {
@@ -163,7 +162,6 @@ func (w *PodWatcher) getRestartTimeFromTrack(alert *v3.ProjectAlert, curCount in
 }
 
 func (w *PodWatcher) checkPodRunning(pod *corev1.Pod, alert *v3.ProjectAlert) {
-
 	if !w.checkPodScheduled(pod, alert) {
 		return
 	}
@@ -185,15 +183,15 @@ func (w *PodWatcher) checkPodRunning(pod *corev1.Pod, alert *v3.ProjectAlert) {
 			desc := fmt.Sprintf("*Alert Name*: %s\n*Cluster Name*: %s\n*Namespace*: %s\n*Container Name*: %s\n*Logs*: %s", alert.Spec.DisplayName, w.clusterName, pod.Namespace, containerStatus.Name, details)
 
 			if err := w.alertManager.SendAlert(alertId, desc, title, alert.Spec.Severity); err != nil {
-				logrus.Errorf("Error occured while getting pod %s: %v", alert.Spec.TargetPod.ID, err)
+				logrus.Errorf("Error occured while send alert %s: %v", alert.Spec.TargetPod.ID, err)
 			}
 			return
 		}
 	}
-	w.checkPodScheduled(pod, alert)
 }
 
 func (w *PodWatcher) checkPodScheduled(pod *corev1.Pod, alert *v3.ProjectAlert) bool {
+
 	alertId := alert.Namespace + "-" + alert.Name
 	for _, condition := range pod.Status.Conditions {
 		if condition.Type == corev1.PodScheduled && condition.Status == corev1.ConditionFalse {
@@ -205,8 +203,8 @@ func (w *PodWatcher) checkPodScheduled(pod *corev1.Pod, alert *v3.ProjectAlert) 
 			if err := w.alertManager.SendAlert(alertId, desc, title, alert.Spec.Severity); err != nil {
 				logrus.Errorf("Error occured while getting pod %s: %v", alert.Spec.TargetPod.ID, err)
 			}
+			return false
 		}
-		return false
 	}
 
 	return true
