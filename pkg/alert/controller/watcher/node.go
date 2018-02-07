@@ -2,6 +2,7 @@ package watcher
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 )
 
 type NodeWatcher struct {
+	machineLister      v3.MachineLister
 	nodeLister         v1.NodeLister
 	clusterAlertLister v3.ClusterAlertLister
 	alertManager       *manager.Manager
@@ -25,6 +27,7 @@ type NodeWatcher struct {
 func NewNodeWatcher(cluster *config.ClusterContext, manager *manager.Manager) *NodeWatcher {
 
 	return &NodeWatcher{
+		machineLister:      cluster.Management.Management.Machines(cluster.ClusterName).Controller().Lister(),
 		nodeLister:         cluster.Core.Nodes("").Controller().Lister(),
 		clusterAlertLister: cluster.Management.Management.ClusterAlerts(cluster.ClusterName).Controller().Lister(),
 		alertManager:       manager,
@@ -45,33 +48,96 @@ func (w *NodeWatcher) Watch(stopc <-chan struct{}) {
 				continue
 			}
 
+			machines, err := w.machineLister.List("", labels.NewSelector())
+			if err != nil {
+				logrus.Infof("Failed to get machine: %v", err)
+				continue
+			}
+
 			for _, alert := range clusterAlerts {
-				if alert.Spec.TargetNode.Condition != "notready" {
-					if alert.Spec.TargetNode.ID != "" {
-						parts := strings.Split(alert.Spec.TargetNode.ID, ":")
-						id := parts[1]
-						newNode, err := w.nodeLister.Get("", id)
-						if err != nil {
-							continue
-						}
-						w.checkNodeReady(newNode, alert)
+				if alert.Spec.TargetNode.ID != "" {
+					parts := strings.Split(alert.Spec.TargetNode.ID, ":")
+					id := parts[1]
+					newNode, err := w.nodeLister.Get("", id)
+					if err != nil {
+						continue
+					}
+					machine := getMachineByNodeName(machines, newNode.Name)
+					w.checkNodeCondition(newNode, alert, machine)
 
-					} else if alert.Spec.TargetNode.Selector != nil {
+				} else if alert.Spec.TargetNode.Selector != nil {
 
-						selector := labels.NewSelector()
-						for key, value := range alert.Spec.TargetNode.Selector {
-							r, _ := labels.NewRequirement(key, selection.Equals, []string{value})
-							selector.Add(*r)
-						}
-						nodes, err := w.nodeLister.List("", selector)
-						if err != nil {
-							continue
-						}
-						for _, node := range nodes {
-							w.checkNodeReady(node, alert)
-						}
+					selector := labels.NewSelector()
+					for key, value := range alert.Spec.TargetNode.Selector {
+						r, _ := labels.NewRequirement(key, selection.Equals, []string{value})
+						selector.Add(*r)
+					}
+					nodes, err := w.nodeLister.List("", selector)
+					if err != nil {
+						continue
+					}
+					for _, node := range nodes {
+						machine := getMachineByNodeName(machines, node.Name)
+						w.checkNodeCondition(node, alert, machine)
 					}
 				}
+			}
+		}
+	}
+}
+
+func getMachineByNodeName(machines []*v3.Machine, nodeName string) *v3.Machine {
+	for _, m := range machines {
+		if m.Status.NodeName == nodeName {
+			return m
+		}
+	}
+
+	return nil
+
+}
+
+func (w *NodeWatcher) checkNodeCondition(node *corev1.Node, alert *v3.ClusterAlert, machine *v3.Machine) {
+	switch alert.Spec.TargetNode.Condition {
+	case "notready":
+		w.checkNodeReady(node, alert)
+	case "mem":
+		w.checkNodeMemUsage(node, alert, machine)
+	case "cpu":
+		w.checkNodeCPUUsage(node, alert, machine)
+	}
+}
+
+func (w *NodeWatcher) checkNodeMemUsage(node *corev1.Node, alert *v3.ClusterAlert, machine *v3.Machine) {
+	alertId := alert.Namespace + "-" + alert.Name
+	if machine != nil {
+		total := machine.Status.NodeStatus.Allocatable.Memory()
+		used := machine.Status.Requested.Memory()
+
+		if used.Value()*100.0/total.Value() > int64(alert.Spec.TargetNode.MemThreshold) {
+			title := fmt.Sprintf("The memory usage on the node %s is over %s%%", node.Name, strconv.Itoa(alert.Spec.TargetNode.MemThreshold))
+			//TODO: how to set unit for display for Quantity
+			desc := fmt.Sprintf("*Alert Name*: %s\n*Cluster Name*: %s\n*Used Memory*: %s\n*Total Memory*: %s", alert.Spec.DisplayName, w.clusterName, used.String(), total.String())
+
+			if err := w.alertManager.SendAlert(alertId, desc, title, alert.Spec.Severity); err != nil {
+				logrus.Errorf("Failed to send alert: %v", err)
+			}
+		}
+	}
+}
+
+func (w *NodeWatcher) checkNodeCPUUsage(node *corev1.Node, alert *v3.ClusterAlert, machine *v3.Machine) {
+	alertId := alert.Namespace + "-" + alert.Name
+	if machine != nil {
+		total := machine.Status.NodeStatus.Allocatable.Cpu()
+		used := machine.Status.Requested.Cpu()
+
+		if used.MilliValue()*100.0/total.MilliValue() > int64(alert.Spec.TargetNode.CPUThreshold) {
+			title := fmt.Sprintf("The CPU usage on the node %s is over %s%%", node.Name, strconv.Itoa(alert.Spec.TargetNode.CPUThreshold))
+			desc := fmt.Sprintf("*Alert Name*: %s\n*Cluster Name*: %s\n*Used CPU*: %s m\n*Total CPU*: %s m", alert.Spec.DisplayName, w.clusterName, strconv.FormatInt(used.MilliValue(), 10), strconv.FormatInt(total.MilliValue(), 10))
+
+			if err := w.alertManager.SendAlert(alertId, desc, title, alert.Spec.Severity); err != nil {
+				logrus.Errorf("Failed to send alert: %v", err)
 			}
 		}
 	}

@@ -135,52 +135,6 @@ func initClusterPreCanAlerts(clusterAlertClient v3.ClusterAlertInterface, cluste
 		logrus.Infof("Failed to create pre-can rules for scheduler: %v", err)
 	}
 
-	dnsRule := &v3.ClusterAlert{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "clusteralert-dns",
-		},
-		Spec: v3.ClusterAlertSpec{
-			ClusterName: clusterName,
-			AlertCommonSpec: v3.AlertCommonSpec{
-				DisplayName:           "Alert for dns",
-				Description:           "Pre-can Alert for dns component",
-				Severity:              "critical",
-				InitialWaitSeconds:    180,
-				RepeatIntervalSeconds: 3600,
-			},
-			TargetSystemService: v3.TargetSystemService{
-				Condition: "dns",
-			},
-		},
-	}
-
-	if _, err := clusterAlertClient.Create(dnsRule); err != nil {
-		logrus.Infof("Failed to create pre-can rules for dns: %v", err)
-	}
-
-	networkRule := &v3.ClusterAlert{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "clusteralert-network",
-		},
-		Spec: v3.ClusterAlertSpec{
-			ClusterName: clusterName,
-			AlertCommonSpec: v3.AlertCommonSpec{
-				DisplayName:           "Alert for network",
-				Description:           "Pre-can Alert for network component",
-				Severity:              "critical",
-				InitialWaitSeconds:    180,
-				RepeatIntervalSeconds: 3600,
-			},
-			TargetSystemService: v3.TargetSystemService{
-				Condition: "network",
-			},
-		},
-	}
-
-	if _, err := clusterAlertClient.Create(networkRule); err != nil {
-		logrus.Infof("Failed to create pre-can rules for network: %v", err)
-	}
-
 }
 
 type ClusterAlertLifecycle struct {

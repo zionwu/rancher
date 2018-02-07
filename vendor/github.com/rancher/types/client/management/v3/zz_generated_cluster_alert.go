@@ -23,6 +23,7 @@ const (
 	ClusterAlertFieldSeverity              = "severity"
 	ClusterAlertFieldState                 = "state"
 	ClusterAlertFieldStatus                = "status"
+	ClusterAlertFieldTargetEvent           = "targetEvent"
 	ClusterAlertFieldTargetNode            = "targetNode"
 	ClusterAlertFieldTargetSystemService   = "targetSystemService"
 	ClusterAlertFieldTransitioning         = "transitioning"
@@ -49,6 +50,7 @@ type ClusterAlert struct {
 	Severity              string               `json:"severity,omitempty"`
 	State                 string               `json:"state,omitempty"`
 	Status                *AlertStatus         `json:"status,omitempty"`
+	TargetEvent           *TargetEvent         `json:"targetEvent,omitempty"`
 	TargetNode            *TargetNode          `json:"targetNode,omitempty"`
 	TargetSystemService   *TargetSystemService `json:"targetSystemService,omitempty"`
 	Transitioning         string               `json:"transitioning,omitempty"`

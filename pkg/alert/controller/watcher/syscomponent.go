@@ -34,7 +34,7 @@ func NewSysComponentWatcher(cluster *config.ClusterContext, manager *manager.Man
 }
 
 func (w *SysComponentWatcher) Watch(stopc <-chan struct{}) {
-	tickChan := time.NewTicker(time.Second * 10).C
+	tickChan := time.NewTicker(time.Second * 60).C
 	for {
 		select {
 		case <-stopc:
