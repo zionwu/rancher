@@ -44,7 +44,6 @@ func (w *DaemonsetWatcher) Watch(stopc <-chan struct{}) {
 		case <-tickChan:
 			projectAlerts, err := w.projectAlertLister.List("", labels.NewSelector())
 			if err != nil {
-				logrus.Infof("Failed to get project alerts: %v", err)
 				continue
 			}
 
@@ -56,6 +55,10 @@ func (w *DaemonsetWatcher) Watch(stopc <-chan struct{}) {
 			}
 
 			for _, alert := range pAlerts {
+				if alert.Status.State == "inactive" {
+					continue
+				}
+
 				if alert.Spec.TargetWorkload.Type == "daemonset" {
 					if alert.Spec.TargetWorkload.ID != "" {
 						parts := strings.Split(alert.Spec.TargetWorkload.ID, ":")
@@ -106,7 +109,7 @@ func (w *DaemonsetWatcher) checkUnavailble(ds *appsv1beta2.DaemonSet, alert *v3.
 			strconv.Itoa(int(ds.Status.DesiredNumberScheduled)))
 
 		if err := w.alertManager.SendAlert(alertId, desc, title, alert.Spec.Severity); err != nil {
-			logrus.Errorf("Failed to send alert: %v", err)
+			logrus.Debugf("Failed to send alert: %v", err)
 		}
 	}
 

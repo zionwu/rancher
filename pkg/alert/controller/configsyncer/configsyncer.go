@@ -56,13 +56,11 @@ func (d *ConfigSyncer) sync() error {
 
 	clusterAlerts, err := d.clusterAlertLister.List("", labels.NewSelector())
 	if err != nil {
-		logrus.Infof("Failed to gett cluster alerts: %v", err)
 		return errors.Wrapf(err, "Creating cluster alerts")
 	}
 
 	projectAlerts, err := d.projectAlertLister.List("", labels.NewSelector())
 	if err != nil {
-		logrus.Infof("Failed to get project alerts: %v", err)
 		return errors.Wrapf(err, "Creating project alerts")
 	}
 
@@ -75,7 +73,6 @@ func (d *ConfigSyncer) sync() error {
 
 	notifiers, err := d.notifierLister.List("", labels.NewSelector())
 	if err != nil {
-		logrus.Infof("Failed to get project notifier: %v", err)
 		return errors.Wrapf(err, "Creating project alerts")
 	}
 
@@ -88,27 +85,24 @@ func (d *ConfigSyncer) sync() error {
 	data, err := yaml.Marshal(config)
 	//logrus.Infof("after updating notifier: %s", string(data))
 	if err != nil {
-		logrus.Infof("Failed to marshal: %v", err)
 		return errors.Wrapf(err, "Marshal secrets")
 	}
 
 	configSecret, err := d.secretClient.Get("alertmanager", metav1.GetOptions{})
 	if err != nil {
-		logrus.Infof("Failed get secret: %v", err)
 		return errors.Wrapf(err, "Get secrets")
 	}
 
 	configSecret.Data["config.yml"] = data
 	_, err = d.secretClient.Update(configSecret)
 	if err != nil {
-		logrus.Infof("Failed to update secret: %v", err)
 		return errors.Wrapf(err, "Update secrets")
 	}
 
 	go func() {
-		for i := 0; i < 10; i++ {
+		for i := 0; i < 5; i++ {
 			d.alertManager.ReloadConfiguration()
-			time.Sleep(10 * time.Second)
+			time.Sleep(30 * time.Second)
 		}
 
 	}()
@@ -192,7 +186,7 @@ func (d *ConfigSyncer) addRecipients(notifiers []*v3.Notifier, receiver *alertco
 		if r.NotifierId != "" {
 			notifier := d.getNotifier(r.NotifierId, notifiers)
 			if notifier == nil {
-				logrus.Infof("Can not find the notifier %s", r.NotifierId)
+				logrus.Debugf("Can not find the notifier %s", r.NotifierId)
 				continue
 			}
 
@@ -241,6 +235,7 @@ func (d *ConfigSyncer) addRecipients(notifiers []*v3.Notifier, receiver *alertco
 					RequireTLS:   &notifier.Spec.SmtpConfig.TLS,
 					To:           notifier.Spec.SmtpConfig.DefaultRecipient,
 					Headers:      header,
+					From:         notifier.Spec.SmtpConfig.Username,
 				}
 				if r.Recipient != "" {
 					email.To = r.Recipient

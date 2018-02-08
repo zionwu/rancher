@@ -239,5 +239,6 @@ func Alert(schemas *types.Schemas, management *config.ManagementContext) {
 
 	schema = schemas.Schema(&managementschema.Version, client.NotifierType)
 	schema.CollectionFormatter = alert.NotifierCollectionFormatter
-	schema.ActionHandler = alert.NotifierActionHandler
+	schema.Formatter = alert.NotifierFormatter
+	schema.ActionHandler = handler.NotifierActionHandler
 }

@@ -16,20 +16,6 @@ type Handler struct {
 }
 
 func AlertFormatter(apiContext *types.APIContext, resource *types.RawResource) {
-	/*
-		status := (resource.Values["status"]).(map[string]interface{})
-		state := status["state"].(string)
-		if state == "inactive" {
-			resource.AddAction(apiContext, "activate")
-		} else if state == "active" {
-			resource.AddAction(apiContext, "deactivate")
-
-		} else if state == "alerting" {
-			resource.AddAction(apiContext, "mute")
-		} else if state == "muted" {
-			resource.AddAction(apiContext, "unmute")
-		}
-	*/
 	resource.AddAction(apiContext, "unmute")
 	resource.AddAction(apiContext, "activate")
 	resource.AddAction(apiContext, "mute")
@@ -37,7 +23,6 @@ func AlertFormatter(apiContext *types.APIContext, resource *types.RawResource) {
 }
 
 func (h *Handler) ClusterActionHandler(actionName string, action *types.Action, request *types.APIContext) error {
-	//logrus.Infof("do activity action:%s", actionName)
 
 	alertClient := h.Management.Management.ClusterAlerts("")
 
@@ -93,10 +78,7 @@ func (h *Handler) ClusterActionHandler(actionName string, action *types.Action, 
 }
 
 func (h *Handler) ProjectActionHandler(actionName string, action *types.Action, request *types.APIContext) error {
-	logrus.Infof("do activity action:%s", actionName)
-
 	alertClient := h.Management.Management.ProjectAlerts("")
-
 	parts := strings.Split(request.ID, ":")
 	ns := parts[0]
 	id := parts[1]

@@ -242,6 +242,11 @@ func alertTypes(schema *types.Schemas) *types.Schemas {
 					Input: "notification",
 				},
 			}
+			schema.ResourceActions = map[string]types.Action{
+				"send": {
+					Input: "notification",
+				},
+			}
 		}).
 		MustImportAndCustomize(&Version, v3.ClusterAlert{}, func(schema *types.Schema) {
 

@@ -7,86 +7,145 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"mime/multipart"
 	"net/http"
+	"net/mail"
 	"net/smtp"
+	"net/textproto"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/prometheus/common/model"
 	"github.com/rancher/norman/parse"
 	"github.com/rancher/norman/types"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func NotifierCollectionFormatter(apiContext *types.APIContext, collection *types.GenericCollection) {
 	collection.AddAction(apiContext, "send")
 }
 
-func NotifierActionHandler(actionName string, action *types.Action, apiContext *types.APIContext) error {
+func NotifierFormatter(apiContext *types.APIContext, resource *types.RawResource) {
+	resource.AddAction(apiContext, "send")
+}
+
+func (h *Handler) NotifierActionHandler(actionName string, action *types.Action, apiContext *types.APIContext) error {
 	switch actionName {
 	case "send":
-		return testNotifier(actionName, action, apiContext)
+
+		return h.testNotifier(actionName, action, apiContext)
 	}
 
 	return errors.Errorf("bad action %v", actionName)
 
 }
 
-func testNotifier(actionName string, action *types.Action, apiContext *types.APIContext) error {
-
+func (h *Handler) testNotifier(actionName string, action *types.Action, apiContext *types.APIContext) error {
 	actionInput, err := parse.ReadBody(apiContext.Request)
 	if err != nil {
 		return err
 	}
-	slackConfigInterface, exist := actionInput["slackConfig"]
+
+	msg := ""
+	msgInf, exist := actionInput["message"]
 	if exist {
-		slackConfig, ok := slackConfigInterface.(map[string]interface{})
-		if ok {
-			url := slackConfig["url"].(string)
-			if err := testSlack(url); err != nil {
-				return err
-			}
-			return nil
-		}
+		msg = msgInf.(string)
 	}
 
-	smtpConfigInterface, exist := actionInput["smtpConfig"]
-	if exist {
-		smtpConfig, ok := smtpConfigInterface.(map[string]interface{})
-		if ok {
-			host := smtpConfig["host"].(string)
-			port := smtpConfig["port"].(string)
-			password := smtpConfig["password"].(string)
-			username := smtpConfig["username"].(string)
-			tls := smtpConfig["tls"].(bool)
-			if err := testEmail(host, port, password, username, tls); err != nil {
+	if apiContext.ID != "" {
+		parts := strings.Split(apiContext.ID, ":")
+		ns := parts[0]
+		id := parts[1]
+		notifier, err := h.Management.Management.Notifiers("").GetNamespaced(ns, id, metav1.GetOptions{})
+		if err != nil {
+			return err
+		}
+		if notifier.Spec.SlackConfig.URL != "" {
+			if err := testSlack(notifier.Spec.SlackConfig.URL, msg); err != nil {
 				return err
 			}
 			return nil
 		}
-	}
 
-	webhookConfigInterface, exist := actionInput["webhookConfig"]
-	if exist {
-		webhookConfig, ok := webhookConfigInterface.(map[string]interface{})
-		if ok {
-			url := webhookConfig["url"].(string)
-			if err := testWebhook(url); err != nil {
+		if notifier.Spec.SmtpConfig.Host != "" {
+			s := notifier.Spec.SmtpConfig
+			if err := testEmail(s.Host, s.Password, s.Username, int(s.Port), s.TLS, msg, s.DefaultRecipient); err != nil {
 				return err
 			}
 			return nil
 		}
-	}
 
-	pagerdutyConfigInterface, exist := actionInput["pagerdutyConfig"]
-	if exist {
-		pagerdutyConfig, ok := pagerdutyConfigInterface.(map[string]interface{})
-		if ok {
-			key := pagerdutyConfig["serviceKey"].(string)
-			if err := testPagerduty(key); err != nil {
+		if notifier.Spec.PagerdutyConfig.ServiceKey != "" {
+			if err := testPagerduty(notifier.Spec.PagerdutyConfig.ServiceKey, msg); err != nil {
 				return err
 			}
 			return nil
 		}
+
+		if notifier.Spec.WebhookConfig.URL != "" {
+			if err := testWebhook(notifier.Spec.WebhookConfig.URL, msg); err != nil {
+				return err
+			}
+			return nil
+		}
+
+	} else {
+
+		slackConfigInterface, exist := actionInput["slackConfig"]
+		if exist {
+			slackConfig, ok := slackConfigInterface.(map[string]interface{})
+			if ok {
+				url := slackConfig["url"].(string)
+				if err := testSlack(url, msg); err != nil {
+					return err
+				}
+				return nil
+			}
+		}
+
+		smtpConfigInterface, exist := actionInput["smtpConfig"]
+		if exist {
+			smtpConfig, ok := smtpConfigInterface.(map[string]interface{})
+			if ok {
+				host := smtpConfig["host"].(string)
+				port, _ := smtpConfig["port"].(json.Number).Int64()
+				password := smtpConfig["password"].(string)
+				username := smtpConfig["username"].(string)
+				receiver := smtpConfig["defaultRecipient"].(string)
+				tls := smtpConfig["tls"].(bool)
+				if err := testEmail(host, password, username, int(port), tls, msg, receiver); err != nil {
+					return err
+				}
+				return nil
+			}
+		}
+
+		webhookConfigInterface, exist := actionInput["webhookConfig"]
+		if exist {
+			webhookConfig, ok := webhookConfigInterface.(map[string]interface{})
+			if ok {
+				url := webhookConfig["url"].(string)
+				if err := testWebhook(url, msg); err != nil {
+					return err
+				}
+				return nil
+			}
+		}
+
+		pagerdutyConfigInterface, exist := actionInput["pagerdutyConfig"]
+		if exist {
+			pagerdutyConfig, ok := pagerdutyConfigInterface.(map[string]interface{})
+			if ok {
+				key := pagerdutyConfig["serviceKey"].(string)
+				if err := testPagerduty(key, msg); err != nil {
+					return err
+				}
+				return nil
+			}
+		}
+
 	}
 
 	return nil
@@ -107,19 +166,22 @@ func hashKey(s string) string {
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
-func testPagerduty(key string) error {
+func testPagerduty(key, msg string) error {
+	if msg == "" {
+		msg = "test pagerduty service key"
+	}
 
-	msg := &pagerDutyMessage{
+	pd := &pagerDutyMessage{
 		ServiceKey:  key,
 		EventType:   "trigger",
 		IncidentKey: hashKey("key"),
-		Description: "test pagerduty service key",
+		Description: msg,
 	}
 
 	url := "https://events.pagerduty.com/generic/2010-04-15/create_event.json"
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(msg); err != nil {
+	if err := json.NewEncoder(&buf).Encode(pd); err != nil {
 		return err
 	}
 	resp, err := http.Post(url, "application/json", &buf)
@@ -134,11 +196,14 @@ func testPagerduty(key string) error {
 	return nil
 }
 
-func testWebhook(url string) error {
+func testWebhook(url, msg string) error {
+	if msg == "" {
+		msg = "test webhook"
+	}
 	alertList := model.Alerts{}
 	a := &model.Alert{}
 	a.Labels = map[model.LabelName]model.LabelValue{}
-	a.Labels[model.LabelName("test_msg")] = model.LabelValue("test webhook")
+	a.Labels[model.LabelName("test_msg")] = model.LabelValue(msg)
 
 	alertList = append(alertList, a)
 
@@ -160,12 +225,15 @@ func testWebhook(url string) error {
 	return nil
 }
 
-func testSlack(url string) error {
+func testSlack(url, msg string) error {
+	if msg == "" {
+		msg = "test slack webhook"
+	}
 	req := struct {
 		Text string `json:"text"`
 	}{}
 
-	req.Text = "webhook validation"
+	req.Text = msg
 
 	data, err := json.Marshal(req)
 	if err != nil {
@@ -193,9 +261,10 @@ func testSlack(url string) error {
 
 	return nil
 }
-func testEmail(host, port, password, username string, requireTLS bool) error {
+
+func testEmail(host, password, username string, port int, requireTLS bool, msg, receiver string) error {
 	var c *smtp.Client
-	smartHost := host + ":" + port
+	smartHost := host + ":" + strconv.Itoa(port)
 
 	if requireTLS {
 		conn, err := tls.Dial("tcp", smartHost, &tls.Config{ServerName: host})
@@ -226,6 +295,64 @@ func testEmail(host, port, password, username string, requireTLS bool) error {
 			}
 		}
 	}
+
+	if msg == "" {
+		msg = "smtp server configuation validation"
+	}
+
+	addrs, err := mail.ParseAddressList(username)
+	if err != nil {
+		return fmt.Errorf("parsing from addresses: %s", err)
+	}
+	if len(addrs) != 1 {
+		return fmt.Errorf("must be exactly one from address")
+	}
+	if err := c.Mail(addrs[0].Address); err != nil {
+		return fmt.Errorf("sending mail from: %s", err)
+	}
+	addrs, err = mail.ParseAddressList(receiver)
+	if err != nil {
+		return fmt.Errorf("parsing to addresses: %s", err)
+	}
+	for _, addr := range addrs {
+		if err := c.Rcpt(addr.Address); err != nil {
+			return fmt.Errorf("sending rcpt to: %s", err)
+		}
+	}
+
+	// Send the email body.
+	wc, err := c.Data()
+	if err != nil {
+		return err
+	}
+	defer wc.Close()
+
+	buffer := &bytes.Buffer{}
+	multipartWriter := multipart.NewWriter(buffer)
+
+	fmt.Fprintf(wc, "Date: %s\r\n", time.Now().Format(time.RFC1123Z))
+	fmt.Fprintf(wc, "Content-Type: multipart/alternative;  boundary=%s\r\n", multipartWriter.Boundary())
+	fmt.Fprintf(wc, "MIME-Version: 1.0\r\n")
+
+	// TODO: Add some useful headers here, such as URL of the alertmanager
+	// and active/resolved.
+	fmt.Fprintf(wc, "\r\n")
+
+	if len(msg) > 0 {
+		// Text template
+		w, err := multipartWriter.CreatePart(textproto.MIMEHeader{"Content-Type": {"text/plain; charset=UTF-8"}})
+		if err != nil {
+			return fmt.Errorf("creating part for text template: %s", err)
+		}
+
+		_, err = w.Write([]byte(msg))
+		if err != nil {
+			return err
+		}
+	}
+
+	multipartWriter.Close()
+	wc.Write(buffer.Bytes())
 
 	return nil
 }

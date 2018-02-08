@@ -42,16 +42,17 @@ func (w *SysComponentWatcher) Watch(stopc <-chan struct{}) {
 		case <-tickChan:
 			clusterAlerts, err := w.clusterAlertLister.List("", labels.NewSelector())
 			if err != nil {
-				logrus.Errorf("Error occured while getting project alerts: %v", err)
 				continue
 			}
 
 			statuses, err := w.componentStatuses.List(metav1.ListOptions{})
 			if err != nil {
-				logrus.Errorf("Error occured while getting component statuses: %v", err)
 				continue
 			}
 			for _, alert := range clusterAlerts {
+				if alert.Status.State == "inactive" {
+					continue
+				}
 				if alert.Spec.TargetSystemService.Condition != "" {
 					w.checkComponentHealthy(statuses, alert)
 				}
@@ -72,7 +73,7 @@ func (w *SysComponentWatcher) checkComponentHealthy(statuses *v1.ComponentStatus
 						desc := fmt.Sprintf("*Alert Name*: %s\n*Cluster Name*: %s\n*Logs*: %s", alert.Spec.DisplayName, w.clusterName, cond.Message)
 
 						if err := w.alertManager.SendAlert(alertId, desc, title, alert.Spec.Severity); err != nil {
-							logrus.Errorf("Failed to send alert: %v", err)
+							logrus.Debugf("Failed to send alert: %v", err)
 						}
 						return
 					}

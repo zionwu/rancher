@@ -1,9 +1,7 @@
 package v3
 
 import (
-	"github.com/rancher/norman/condition"
 	"github.com/rancher/norman/types"
-	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -78,12 +76,12 @@ type TargetNode struct {
 type TargetPod struct {
 	ID                     string `json:"id,omitempty" norman:"required"`
 	Condition              string `json:"condition,omitempty" norman:"required,options=notrunning|notscheduled|restarts,default=notrunning"`
-	RestartTimes           int    `json:"restartTimes,omitempty" norman:"min=1,default=3"`
-	RestartIntervalSeconds int    `json:"restartIntervalSeconds,omitempty" norman:"min=1,default=300"`
+	RestartTimes           int    `json:"restartTimes,omitempty" norman:"min=1"`
+	RestartIntervalSeconds int    `json:"restartIntervalSeconds,omitempty"  norman:"min=1"`
 }
 
 type TargetEvent struct {
-	Type         string `json:"type,omitempty" norman:"required,options=normal|warning,default=warning"`
+	Type         string `json:"type,omitempty" norman:"required,options=Normal|Warning,default=warning"`
 	ResourceKind string `json:"resourceKind,omitempty" norman:"required,options=Pod|Node|Deployment|Statefulset|Daemonset"`
 }
 
@@ -99,30 +97,7 @@ type TargetSystemService struct {
 }
 
 type AlertStatus struct {
-	StartedAt string `json:"startedAt,omitempty"`
-	State     string `json:"state,omitempty" norman:"required,options=active|inactive|alerting|muted,default=notready"`
-
-	Conditions []AlertCondition `json:"conditions,omitempty"`
-}
-
-var (
-	AlertConditionInitialized condition.Cond = "Initialized"
-	AlertConditionProvisioned condition.Cond = "Provisioned"
-)
-
-type AlertCondition struct {
-	// Type of cluster condition.
-	Type condition.Cond `json:"type"`
-	// Status of the condition, one of True, False, Unknown.
-	Status v1.ConditionStatus `json:"status"`
-	// The last time this condition was updated.
-	LastUpdateTime string `json:"lastUpdateTime,omitempty"`
-	// Last time the condition transitioned from one status to another.
-	LastTransitionTime string `json:"lastTransitionTime,omitempty"`
-	// The reason for the condition's last transition.
-	Reason string `json:"reason,omitempty"`
-	// Human-readable message indicating details about last transition
-	Message string `json:"message,omitempty"`
+	State string `json:"state,omitempty" norman:"required,options=active|inactive|alerting|muted,default=active"`
 }
 
 type Notifier struct {

@@ -14,31 +14,28 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const (
-	alertManager = "alertmanager"
-)
-
 func Register(ctx context.Context, cluster *config.ClusterContext) {
 	alertmanager := manager.NewManager(cluster)
 
-	clusterAlertClient := cluster.Management.Management.ClusterAlerts(cluster.ClusterName)
-	projectAlertClient := cluster.Management.Management.ProjectAlerts("")
-	notifierClient := cluster.Management.Management.Notifiers("")
+	clusterAlerts := cluster.Management.Management.ClusterAlerts(cluster.ClusterName)
+	projectAlerts := cluster.Management.Management.ProjectAlerts("")
+	notifiers := cluster.Management.Management.Notifiers("")
+	projects := cluster.Management.Management.Projects("")
 
-	clusterAlertLifecycle := &ClusterAlertLifecycle{}
-	clusterAlertClient.AddLifecycle("cluster-alert-init-controller", clusterAlertLifecycle)
-
-	projectAlertLifecycle := &ProjectAlertLifecycle{}
-	projectAlertClient.AddLifecycle("project-alert-init-controller", projectAlertLifecycle)
+	projectLifecycle := &ProjectLifecycle{
+		projectAlerts: projectAlerts,
+		clusterName:   cluster.ClusterName,
+	}
+	projects.AddLifecycle("project-precan-alert-controller", projectLifecycle)
 
 	deployer := deploy.NewDeployer(cluster, alertmanager)
-	clusterAlertClient.AddClusterScopedHandler("cluster-alert-deployer", cluster.ClusterName, deployer.ClusterSync)
-	projectAlertClient.AddClusterScopedHandler("project-alert-deployer", cluster.ClusterName, deployer.ProjectSync)
+	clusterAlerts.AddClusterScopedHandler("cluster-alert-deployer", cluster.ClusterName, deployer.ClusterSync)
+	projectAlerts.AddClusterScopedHandler("project-alert-deployer", cluster.ClusterName, deployer.ProjectSync)
 
 	configSyncer := configsyner.NewConfigSyncer(cluster, alertmanager)
-	clusterAlertClient.AddClusterScopedHandler("cluster-config-syncer", cluster.ClusterName, configSyncer.ClusterSync)
-	projectAlertClient.AddClusterScopedHandler("project-config-syncer", cluster.ClusterName, configSyncer.ProjectSync)
-	notifierClient.AddClusterScopedHandler("notifier-config-syncer", cluster.ClusterName, configSyncer.NotifierSync)
+	clusterAlerts.AddClusterScopedHandler("cluster-config-syncer", cluster.ClusterName, configSyncer.ClusterSync)
+	projectAlerts.AddClusterScopedHandler("project-config-syncer", cluster.ClusterName, configSyncer.ProjectSync)
+	notifiers.AddClusterScopedHandler("notifier-config-syncer", cluster.ClusterName, configSyncer.NotifierSync)
 
 	stateSyncer := statesyncer.NewStateSyncer(cluster, alertmanager)
 	go stateSyncer.Run(ctx.Done())
@@ -61,11 +58,13 @@ func Register(ctx context.Context, cluster *config.ClusterContext) {
 	dsWatcher := watcher.NewDaemonsetWatcher(cluster, alertmanager)
 	go dsWatcher.Watch(ctx.Done())
 
-	initClusterPreCanAlerts(clusterAlertClient, cluster.ClusterName)
+	watcher.StartEventWatcher(cluster, alertmanager)
+
+	initClusterPreCanAlerts(clusterAlerts, cluster.ClusterName)
 
 }
 
-func initClusterPreCanAlerts(clusterAlertClient v3.ClusterAlertInterface, clusterName string) {
+func initClusterPreCanAlerts(clusterAlerts v3.ClusterAlertInterface, clusterName string) {
 	etcdRule := &v3.ClusterAlert{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "clusteralert-etcd",
@@ -85,7 +84,7 @@ func initClusterPreCanAlerts(clusterAlertClient v3.ClusterAlertInterface, cluste
 		},
 	}
 
-	if _, err := clusterAlertClient.Create(etcdRule); err != nil {
+	if _, err := clusterAlerts.Create(etcdRule); err != nil {
 		logrus.Infof("Failed to create pre-can rules for etcd: %v", err)
 	}
 
@@ -108,7 +107,7 @@ func initClusterPreCanAlerts(clusterAlertClient v3.ClusterAlertInterface, cluste
 		},
 	}
 
-	if _, err := clusterAlertClient.Create(cmRule); err != nil {
+	if _, err := clusterAlerts.Create(cmRule); err != nil {
 		logrus.Infof("Failed to create pre-can rules for controller manager: %v", err)
 	}
 
@@ -131,42 +130,160 @@ func initClusterPreCanAlerts(clusterAlertClient v3.ClusterAlertInterface, cluste
 		},
 	}
 
-	if _, err := clusterAlertClient.Create(schedulerRule); err != nil {
+	if _, err := clusterAlerts.Create(schedulerRule); err != nil {
 		logrus.Infof("Failed to create pre-can rules for scheduler: %v", err)
+	}
+
+	nodeRule := &v3.ClusterAlert{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "clusteralert-node-mem",
+		},
+		Spec: v3.ClusterAlertSpec{
+			ClusterName: clusterName,
+			AlertCommonSpec: v3.AlertCommonSpec{
+				DisplayName:           "Alert for Node Memory Usage",
+				Description:           "Pre-can Alert for node mem usage",
+				Severity:              "critical",
+				InitialWaitSeconds:    180,
+				RepeatIntervalSeconds: 3600,
+			},
+			TargetNode: v3.TargetNode{
+				Condition:    "mem",
+				MemThreshold: 70,
+				Selector: map[string]string{
+					"node": "node",
+				},
+			},
+		},
+	}
+
+	if _, err := clusterAlerts.Create(nodeRule); err != nil {
+		logrus.Infof("Failed to create pre-can rules for node: %v", err)
+	}
+
+	eventRule := &v3.ClusterAlert{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "clusteralert-deploment-event",
+		},
+		Spec: v3.ClusterAlertSpec{
+			ClusterName: clusterName,
+			AlertCommonSpec: v3.AlertCommonSpec{
+				DisplayName:           "Alert for Warning Event of Deployment",
+				Description:           "Pre-can Alert for warning event",
+				Severity:              "critical",
+				InitialWaitSeconds:    180,
+				RepeatIntervalSeconds: 3600,
+			},
+			TargetEvent: v3.TargetEvent{
+				Type:         "Warning",
+				ResourceKind: "Deployemnt",
+			},
+		},
+	}
+
+	if _, err := clusterAlerts.Create(eventRule); err != nil {
+		logrus.Infof("Failed to create pre-can rules for event: %v", err)
 	}
 
 }
 
-type ClusterAlertLifecycle struct {
+type ProjectLifecycle struct {
+	projectAlerts v3.ProjectAlertInterface
+	clusterName   string
 }
 
-func (l *ClusterAlertLifecycle) Create(obj *v3.ClusterAlert) (*v3.ClusterAlert, error) {
-	obj.Status.State = "active"
+func (l *ProjectLifecycle) Create(obj *v3.Project) (*v3.Project, error) {
+	deploymentAlert := &v3.ProjectAlert{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "projectalert-deploment",
+			Namespace: obj.Name,
+		},
+		Spec: v3.ProjectAlertSpec{
+			ProjectName: l.clusterName + ":" + obj.Name,
+			AlertCommonSpec: v3.AlertCommonSpec{
+				DisplayName:           "Alert for Deployment",
+				Description:           "Pre-can Alert for Deployment",
+				Severity:              "critical",
+				InitialWaitSeconds:    180,
+				RepeatIntervalSeconds: 3600,
+			},
+			TargetWorkload: v3.TargetWorkload{
+				Type: "deployment",
+				Selector: map[string]string{
+					"app": "deployment",
+				},
+				UnavailablePercentage: 50,
+			},
+		},
+	}
+
+	if _, err := l.projectAlerts.Create(deploymentAlert); err != nil {
+		logrus.Infof("Failed to create pre-can rules for deployment: %v", err)
+	}
+
+	dsAlert := &v3.ProjectAlert{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "projectalert-daemonset",
+			Namespace: obj.Name,
+		},
+		Spec: v3.ProjectAlertSpec{
+			ProjectName: l.clusterName + ":" + obj.Name,
+			AlertCommonSpec: v3.AlertCommonSpec{
+				DisplayName:           "Alert for Daemonset",
+				Description:           "Pre-can Alert for Daemonset",
+				Severity:              "critical",
+				InitialWaitSeconds:    180,
+				RepeatIntervalSeconds: 3600,
+			},
+			TargetWorkload: v3.TargetWorkload{
+				Type: "daemonset",
+				Selector: map[string]string{
+					"app": "daemonset",
+				},
+				UnavailablePercentage: 50,
+			},
+		},
+	}
+
+	if _, err := l.projectAlerts.Create(dsAlert); err != nil {
+		logrus.Infof("Failed to create pre-can rules for daemonset: %v", err)
+	}
+
+	ssAlert := &v3.ProjectAlert{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "projectalert-statefuleset",
+			Namespace: obj.Name,
+		},
+		Spec: v3.ProjectAlertSpec{
+			ProjectName: l.clusterName + ":" + obj.Name,
+			AlertCommonSpec: v3.AlertCommonSpec{
+				DisplayName:           "Alert for StatefulSet",
+				Description:           "Pre-can Alert for StatefulSet",
+				Severity:              "critical",
+				InitialWaitSeconds:    180,
+				RepeatIntervalSeconds: 3600,
+			},
+			TargetWorkload: v3.TargetWorkload{
+				Type: "statefulset",
+				Selector: map[string]string{
+					"app": "statefulset",
+				},
+				UnavailablePercentage: 50,
+			},
+		},
+	}
+
+	if _, err := l.projectAlerts.Create(ssAlert); err != nil {
+		logrus.Infof("Failed to create pre-can rules for daemonset: %v", err)
+	}
 
 	return obj, nil
 }
 
-func (l *ClusterAlertLifecycle) Updated(obj *v3.ClusterAlert) (*v3.ClusterAlert, error) {
+func (l *ProjectLifecycle) Updated(obj *v3.Project) (*v3.Project, error) {
 	return obj, nil
 }
 
-func (l *ClusterAlertLifecycle) Remove(obj *v3.ClusterAlert) (*v3.ClusterAlert, error) {
-	return obj, nil
-}
-
-type ProjectAlertLifecycle struct {
-}
-
-func (l *ProjectAlertLifecycle) Create(obj *v3.ProjectAlert) (*v3.ProjectAlert, error) {
-	obj.Status.State = "active"
-
-	return obj, nil
-}
-
-func (l *ProjectAlertLifecycle) Updated(obj *v3.ProjectAlert) (*v3.ProjectAlert, error) {
-	return obj, nil
-}
-
-func (l *ProjectAlertLifecycle) Remove(obj *v3.ProjectAlert) (*v3.ProjectAlert, error) {
+func (l *ProjectLifecycle) Remove(obj *v3.Project) (*v3.Project, error) {
 	return obj, nil
 }

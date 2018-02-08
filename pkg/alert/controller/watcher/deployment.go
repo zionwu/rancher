@@ -45,7 +45,6 @@ func (w *DeploymentWatcher) Watch(stopc <-chan struct{}) {
 		case <-tickChan:
 			projectAlerts, err := w.projectAlertLister.List("", labels.NewSelector())
 			if err != nil {
-				logrus.Infof("Failed to get project alerts: %v", err)
 				continue
 			}
 
@@ -57,6 +56,9 @@ func (w *DeploymentWatcher) Watch(stopc <-chan struct{}) {
 			}
 
 			for _, alert := range pAlerts {
+				if alert.Status.State == "inactive" {
+					continue
+				}
 				if alert.Spec.TargetWorkload.Type == "deployment" {
 
 					if alert.Spec.TargetWorkload.ID != "" {
@@ -79,7 +81,6 @@ func (w *DeploymentWatcher) Watch(stopc <-chan struct{}) {
 						}
 						deps, err := w.deploymentLister.List("", selector)
 						if err != nil {
-							logrus.Errorf("Failed to find deployments: %v", err)
 							continue
 						}
 						for _, dep := range deps {
@@ -109,7 +110,7 @@ func (w *DeploymentWatcher) checkUnavailble(deployment *appsv1beta2.Deployment, 
 			strconv.Itoa(int(*deployment.Spec.Replicas)))
 
 		if err := w.alertManager.SendAlert(alertId, desc, title, alert.Spec.Severity); err != nil {
-			logrus.Errorf("Failed to send alert: %v", err)
+			logrus.Debugf("Failed to send alert: %v", err)
 		}
 	}
 

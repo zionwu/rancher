@@ -2,6 +2,7 @@ package watcher
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/rancher/rancher/pkg/alert/manager"
 	"github.com/rancher/types/apis/management.cattle.io/v3"
@@ -10,7 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 )
 
-type EventLifecycle struct {
+type EventWatcher struct {
 	eventLister        v3.ClusterEventLister
 	clusterAlertLister v3.ClusterAlertLister
 	alertManager       *manager.Manager
@@ -18,50 +19,44 @@ type EventLifecycle struct {
 }
 
 func StartEventWatcher(cluster *config.ClusterContext, manager *manager.Manager) {
-	client := cluster.Management.Management.ClusterEvents(cluster.ClusterName)
+	clusterEvents := cluster.Management.Management.ClusterEvents("")
 
-	eventLifecycle := &EventLifecycle{
-		eventLister:        client.Controller().Lister(),
+	eventWatcher := &EventWatcher{
+		eventLister:        clusterEvents.Controller().Lister(),
 		clusterAlertLister: cluster.Management.Management.ClusterAlerts(cluster.ClusterName).Controller().Lister(),
 		alertManager:       manager,
 		clusterName:        cluster.ClusterName,
 	}
 
-	client.AddLifecycle("cluster-event-alert", eventLifecycle)
+	clusterEvents.AddClusterScopedHandler("cluster-event-alerter", cluster.ClusterName, eventWatcher.Sync)
 }
 
-func (l *EventLifecycle) Create(obj *v3.ClusterEvent) (*v3.ClusterEvent, error) {
+func (l *EventWatcher) Sync(key string, obj *v3.ClusterEvent) error {
 	clusterAlerts, err := l.clusterAlertLister.List("", labels.NewSelector())
 	if err != nil {
-		logrus.Infof("Failed to get cluster alerts: %v", err)
-		return obj, nil
+		return err
 	}
+
 	for _, alert := range clusterAlerts {
+		if alert.Status.State == "inactive" {
+			continue
+		}
 		alertId := alert.Namespace + "-" + alert.Name
 		target := alert.Spec.TargetEvent
 		if target.ResourceKind != "" {
 			if target.Type == obj.Event.Type && target.ResourceKind == obj.Event.InvolvedObject.Kind {
 
-				title := fmt.Sprintf("A % event of %s occurred", target.Type, target.ResourceKind)
+				title := fmt.Sprintf("%s event of %s occurred", target.Type, target.ResourceKind)
 				//TODO: how to set unit for display for Quantity
-				desc := fmt.Sprintf("*Alert Name*: %s\n*Cluster Name*: %s\n*Target*: %s\n*Event Message*: %s", obj.Event.InvolvedObject.Name, obj.Event.Message)
+				desc := fmt.Sprintf("*Alert Name*: %s\n*Cluster Name*: %s\n*Target*: %s\n*Count*: %s\n*Event Message*: %s\n*First Seen*: %s\n*Last Seen*: %s",
+					alert.Spec.DisplayName, l.clusterName, obj.Event.InvolvedObject.Name, strconv.Itoa(int(obj.Event.Count)), obj.Event.Message, obj.Event.FirstTimestamp, obj.Event.LastTimestamp)
 
 				if err := l.alertManager.SendAlert(alertId, desc, title, alert.Spec.Severity); err != nil {
-					logrus.Errorf("Failed to send alert: %v", err)
+					logrus.Debugf("Failed to send alert: %v", err)
 				}
-
 			}
-
 		}
 	}
 
-	return obj, nil
-}
-
-func (l *EventLifecycle) Updated(obj *v3.ClusterEvent) (*v3.ClusterEvent, error) {
-	return obj, nil
-}
-
-func (l *EventLifecycle) Remove(obj *v3.ClusterEvent) (*v3.ClusterEvent, error) {
-	return obj, nil
+	return nil
 }

@@ -7,7 +7,6 @@ import (
 	"github.com/rancher/types/apis/core/v1"
 	"github.com/rancher/types/apis/management.cattle.io/v3"
 	"github.com/rancher/types/config"
-	"github.com/sirupsen/logrus"
 	yaml "gopkg.in/yaml.v2"
 	appsv1beta2 "k8s.io/api/apps/v1beta2"
 	corev1 "k8s.io/api/core/v1"
@@ -50,25 +49,21 @@ func (d *Deployer) deploy() error {
 		},
 	}
 	if _, err := d.nsClient.Create(ns); err != nil && !apierrors.IsAlreadyExists(err) {
-		logrus.Errorf("Error occured while create ns: %v", err)
 		return errors.Wrapf(err, "Creating ns")
 	}
 
 	secret := d.getSecret()
 	if _, err := d.secretClient.Create(secret); err != nil && !apierrors.IsAlreadyExists(err) {
-		logrus.Errorf("Error occured while create secret: %v", err)
 		return errors.Wrapf(err, "Creating secret")
 	}
 
 	deployment := getDeployment()
 	if _, err := d.appsClient.Create(deployment); err != nil && !apierrors.IsAlreadyExists(err) {
-		logrus.Errorf("Error occured while create deployment: %v", err)
 		return errors.Wrapf(err, "Creating deployment")
 	}
 
 	service := getService()
 	if _, err := d.svcClient.Create(service); err != nil && !apierrors.IsAlreadyExists(err) {
-		logrus.Errorf("Error occured while create service: %v", err)
 		return errors.Wrapf(err, "Creating service")
 	}
 

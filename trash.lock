@@ -1,5 +1,5 @@
 package: github.com/rancher/cattle
 import:
 - package: github.com/rancher/types
-  version: 819e3008e090d8002f080e39c318517b8b8160b9
+  version: cdbf662f275036593eb8d92f0f8a1b468d5ba792
   repo: https://github.com/zionwu/types.git

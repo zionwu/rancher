@@ -42,13 +42,11 @@ func (s *StateSyncer) Run(stopc <-chan struct{}) {
 			} else {
 				clusterAlerts, err := s.clusterAlertClient.Controller().Lister().List("", labels.NewSelector())
 				if err != nil {
-					logrus.Errorf("Error occured while getting cluster alerts: %v", err)
 					continue
 				}
 
 				projectAlerts, err := s.projectAlertClient.Controller().Lister().List("", labels.NewSelector())
 				if err != nil {
-					logrus.Errorf("Error occured while getting project alerts: %v", err)
 					continue
 				}
 

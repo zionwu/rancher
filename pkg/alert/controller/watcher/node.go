@@ -44,17 +44,18 @@ func (w *NodeWatcher) Watch(stopc <-chan struct{}) {
 		case <-tickChan:
 			clusterAlerts, err := w.clusterAlertLister.List("", labels.NewSelector())
 			if err != nil {
-				logrus.Infof("Failed to get cluster alerts: %v", err)
 				continue
 			}
 
 			machines, err := w.machineLister.List("", labels.NewSelector())
 			if err != nil {
-				logrus.Infof("Failed to get machine: %v", err)
 				continue
 			}
 
 			for _, alert := range clusterAlerts {
+				if alert.Status.State == "inactive" {
+					continue
+				}
 				if alert.Spec.TargetNode.ID != "" {
 					parts := strings.Split(alert.Spec.TargetNode.ID, ":")
 					id := parts[1]
@@ -120,7 +121,7 @@ func (w *NodeWatcher) checkNodeMemUsage(node *corev1.Node, alert *v3.ClusterAler
 			desc := fmt.Sprintf("*Alert Name*: %s\n*Cluster Name*: %s\n*Used Memory*: %s\n*Total Memory*: %s", alert.Spec.DisplayName, w.clusterName, used.String(), total.String())
 
 			if err := w.alertManager.SendAlert(alertId, desc, title, alert.Spec.Severity); err != nil {
-				logrus.Errorf("Failed to send alert: %v", err)
+				logrus.Debugf("Failed to send alert: %v", err)
 			}
 		}
 	}
@@ -137,7 +138,7 @@ func (w *NodeWatcher) checkNodeCPUUsage(node *corev1.Node, alert *v3.ClusterAler
 			desc := fmt.Sprintf("*Alert Name*: %s\n*Cluster Name*: %s\n*Used CPU*: %s m\n*Total CPU*: %s m", alert.Spec.DisplayName, w.clusterName, strconv.FormatInt(used.MilliValue(), 10), strconv.FormatInt(total.MilliValue(), 10))
 
 			if err := w.alertManager.SendAlert(alertId, desc, title, alert.Spec.Severity); err != nil {
-				logrus.Errorf("Failed to send alert: %v", err)
+				logrus.Debugf("Failed to send alert: %v", err)
 			}
 		}
 	}
@@ -153,7 +154,7 @@ func (w *NodeWatcher) checkNodeReady(node *corev1.Node, alert *v3.ClusterAlert) 
 				desc := fmt.Sprintf("*Alert Name*: %s\n*Cluster Name*: %s\n*Logs*: %s", alert.Spec.DisplayName, w.clusterName, cond.Message)
 
 				if err := w.alertManager.SendAlert(alertId, desc, title, alert.Spec.Severity); err != nil {
-					logrus.Errorf("Failed to send alert: %v", err)
+					logrus.Debugf("Failed to send alert: %v", err)
 				}
 				return
 			}
